@@ -4,8 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import PersonalInfoForm from '../../components/registration/PersonalInfoForm';
 import RegistrationStepPlaceholder from '../../components/registration/RegistrationStepPlaceholder';
 import RegistrationStepTabs, { REGISTRATION_STEPS } from '../../components/registration/RegistrationStepTabs';
+import VehicleInfoForm from '../../components/registration/VehicleInfoForm';
 import translations from '../../config/registrationTranslations';
 import { createEmptyPersonalInfo, validatePersonalInfo } from '../../utils/validatePersonalInfo';
+import { createEmptyVehicleInfo, validateVehicleInfo } from '../../utils/validateVehicleInfo';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -19,9 +21,13 @@ export default function DriverRegistrationScreen() {
   const [activeStep, setActiveStep] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [personalInfo, setPersonalInfo] = useState(createEmptyPersonalInfo);
+  const [vehicleInfo, setVehicleInfo] = useState(createEmptyVehicleInfo);
   const [touched, setTouched] = useState({});
   const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
+  const [vehicleTouched, setVehicleTouched] = useState({});
+  const [hasAttemptedVehicleContinue, setHasAttemptedVehicleContinue] = useState(false);
   const [personalFormOffset, setPersonalFormOffset] = useState(0);
+  const [vehicleFormOffset, setVehicleFormOffset] = useState(0);
   const scrollRef = useRef(null);
 
   const copy = translations[personalInfo.language] || translations.es;
@@ -32,10 +38,21 @@ export default function DriverRegistrationScreen() {
     [personalInfo, copy],
   );
   const hasPersonalInfoErrors = Object.keys(errors).length > 0;
-  const continueDisabled = activeStep === 0 && hasAttemptedContinue && hasPersonalInfoErrors;
+  const vehicleErrors = useMemo(
+    () => validateVehicleInfo(vehicleInfo, copy),
+    [vehicleInfo, copy],
+  );
+  const hasVehicleInfoErrors = Object.keys(vehicleErrors).length > 0;
+  const continueDisabled = (activeStep === 0 && hasAttemptedContinue && hasPersonalInfoErrors)
+    || (activeStep === 1 && hasAttemptedVehicleContinue && hasVehicleInfoErrors);
 
   const updatePersonalInfo = (field, value) => {
     setPersonalInfo((current) => ({ ...current, [field]: value }));
+    setIsComplete(false);
+  };
+
+  const updateVehicleInfo = (field, value) => {
+    setVehicleInfo((current) => ({ ...current, [field]: value }));
     setIsComplete(false);
   };
 
@@ -56,10 +73,33 @@ export default function DriverRegistrationScreen() {
     scrollRef.current?.scrollTo({ y: Math.max(personalFormOffset - 8, 0), animated: true });
   };
 
+  const showVehicleInfoErrors = () => {
+    setHasAttemptedVehicleContinue(true);
+    setVehicleTouched({
+      category: true,
+      plate: true,
+      make: true,
+      model: true,
+      year: true,
+      color: true,
+      passengerCapacity: true,
+      photo: true,
+    });
+    scrollRef.current?.scrollTo({ y: Math.max(vehicleFormOffset - 8, 0), animated: true });
+  };
+
   const selectStep = (step) => {
     if (step === activeStep) return;
     if (activeStep === 0 && step > 0 && hasPersonalInfoErrors) {
       showPersonalInfoErrors();
+      return;
+    }
+    if (activeStep === 0 && step > 1) {
+      setActiveStep(1);
+      return;
+    }
+    if (activeStep === 1 && step > 1 && hasVehicleInfoErrors) {
+      showVehicleInfoErrors();
       return;
     }
     setIsComplete(false);
@@ -74,6 +114,16 @@ export default function DriverRegistrationScreen() {
       }
       setHasAttemptedContinue(true);
       setActiveStep(1);
+      return;
+    }
+
+    if (activeStep === 1) {
+      if (hasVehicleInfoErrors) {
+        showVehicleInfoErrors();
+        return;
+      }
+      setHasAttemptedVehicleContinue(true);
+      setActiveStep(2);
       return;
     }
 
@@ -137,6 +187,17 @@ export default function DriverRegistrationScreen() {
               showAllErrors={hasAttemptedContinue}
               touched={touched}
               values={personalInfo}
+            />
+          ) : currentStep.key === 'vehicle' ? (
+            <VehicleInfoForm
+              copy={copy}
+              errors={vehicleErrors}
+              onBlur={(field) => setVehicleTouched((current) => ({ ...current, [field]: true }))}
+              onChange={updateVehicleInfo}
+              onLayout={(event) => setVehicleFormOffset(event.nativeEvent.layout.y)}
+              showAllErrors={hasAttemptedVehicleContinue}
+              touched={vehicleTouched}
+              values={vehicleInfo}
             />
           ) : (
             <RegistrationStepPlaceholder copy={copy} stepKey={currentStep.key} />

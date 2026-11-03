@@ -28,8 +28,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "UberClone necesita acceso a tus fotos para usarla como imagen de perfil.",
-          "cameraPermission": "UberClone necesita acceso a la cámara para tomar tu foto de perfil.",
+          "photosPermission": "UberClone necesita acceso a tus fotos para seleccionar una imagen de perfil o del vehículo.",
+          "cameraPermission": "UberClone necesita acceso a la cámara para tomar una imagen de perfil o del vehículo.",
           "microphonePermission": false
         }
       ]

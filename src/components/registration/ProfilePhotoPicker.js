@@ -3,7 +3,15 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import * as ImagePicker from 'expo-image-picker';
 import { fieldStatusStyles } from './PersonalInfoField';
 
-export default function ProfilePhotoPicker({ value, onChange, error, copy, isValid }) {
+export default function ProfilePhotoPicker({
+  value,
+  onChange,
+  error,
+  copy,
+  isValid,
+  aspect = [1, 1],
+  cameraType = ImagePicker.CameraType.front,
+}) {
   const [busy, setBusy] = useState(false);
   const [permissionErrorKey, setPermissionErrorKey] = useState('');
 
@@ -25,14 +33,14 @@ export default function ProfilePhotoPicker({ value, onChange, error, copy, isVal
         ? await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
-            aspect: [1, 1],
-            cameraType: ImagePicker.CameraType.front,
+            aspect,
+            cameraType,
             quality: 0.8,
           })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
-            aspect: [1, 1],
+            aspect,
             quality: 0.8,
           });
 
