@@ -1,38 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-const STEP_CONTENT = {
-  personal: {
-    icon: '01',
-    title: 'Cuéntanos sobre ti',
-    description:
-      'Aquí podrás agregar tus datos personales y de contacto para crear tu perfil de conductor.',
-    detail: 'Tu información estará organizada en un formulario sencillo y seguro.',
-  },
-  vehicle: {
-    icon: '02',
-    title: 'Registra tu vehículo',
-    description:
-      'En este paso podrás ingresar los detalles del vehículo con el que realizarás tus viajes.',
-    detail: 'Categoría, placa, marca, modelo y capacidad estarán aquí.',
-  },
-  documents: {
-    icon: '03',
-    title: 'Documentos y pagos',
-    description:
-      'Prepara la información de tus documentos y el método para recibir tus ganancias.',
-    detail: 'Los requisitos y las validaciones se incorporarán en el siguiente avance.',
-  },
-};
-
-export default function RegistrationStepPlaceholder({ stepKey }) {
-  const content = STEP_CONTENT[stepKey];
+export default function RegistrationStepPlaceholder({ stepKey, copy }) {
+  const content = copy.stepContent[stepKey];
 
   return (
     <View style={styles.card}>
       <View style={styles.iconBadge}>
-        <Text style={styles.iconText}>{content.icon}</Text>
+        <Text style={styles.iconText}>{String(['personal', 'vehicle', 'documents'].indexOf(stepKey) + 1).padStart(2, '0')}</Text>
       </View>
-      <Text style={styles.eyebrow}>PASO DE REGISTRO</Text>
+      <Text style={styles.eyebrow}>{copy.registrationStep}</Text>
       <Text style={styles.title}>{content.title}</Text>
       <Text style={styles.description}>{content.description}</Text>
       <View style={styles.divider} />

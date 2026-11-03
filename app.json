@@ -23,7 +23,16 @@
     },
     "plugins": [
       "expo-router",
-      "expo-status-bar"
+      "expo-status-bar",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "UberClone necesita acceso a tus fotos para usarla como imagen de perfil.",
+          "cameraPermission": "UberClone necesita acceso a la cámara para tomar tu foto de perfil.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

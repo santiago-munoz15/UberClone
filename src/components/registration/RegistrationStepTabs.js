@@ -9,12 +9,12 @@ const COLORS = {
 };
 
 export const REGISTRATION_STEPS = [
-  { key: 'personal', label: 'Datos personales' },
-  { key: 'vehicle', label: 'Vehículo' },
-  { key: 'documents', label: 'Documentos y pagos' },
+  { key: 'personal' },
+  { key: 'vehicle' },
+  { key: 'documents' },
 ];
 
-export default function RegistrationStepTabs({ activeStep, onSelect }) {
+export default function RegistrationStepTabs({ activeStep, onSelect, copy }) {
   return (
     <View accessibilityRole="tablist" style={styles.container}>
       {REGISTRATION_STEPS.map((step, index) => {
@@ -26,7 +26,7 @@ export default function RegistrationStepTabs({ activeStep, onSelect }) {
             key={step.key}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            accessibilityLabel={`${index + 1}. ${step.label}`}
+            accessibilityLabel={`${index + 1}. ${copy.steps[index]}`}
             onPress={() => onSelect(index)}
             style={({ pressed }) => [
               styles.tab,
@@ -36,11 +36,11 @@ export default function RegistrationStepTabs({ activeStep, onSelect }) {
           >
             <View style={[styles.number, (selected || complete) && styles.activeNumber]}>
               <Text style={[styles.numberText, (selected || complete) && styles.activeNumberText]}>
-                {complete ? '✓' : index + 1}
+              {complete ? '✓' : index + 1}
               </Text>
             </View>
             <Text style={[styles.label, selected && styles.selectedLabel]} numberOfLines={2}>
-              {step.label}
+              {copy.steps[index]}
             </Text>
           </Pressable>
         );
