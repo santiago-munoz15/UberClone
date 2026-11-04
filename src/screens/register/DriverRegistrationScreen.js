@@ -2,12 +2,14 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PersonalInfoForm from '../../components/registration/PersonalInfoForm';
+import DocumentPaymentForm from '../../components/registration/DocumentPaymentForm';
 import RegistrationStepPlaceholder from '../../components/registration/RegistrationStepPlaceholder';
 import RegistrationStepTabs, { REGISTRATION_STEPS } from '../../components/registration/RegistrationStepTabs';
 import VehicleInfoForm from '../../components/registration/VehicleInfoForm';
 import translations from '../../config/registrationTranslations';
 import { createEmptyPersonalInfo, validatePersonalInfo } from '../../utils/validatePersonalInfo';
 import { createEmptyVehicleInfo, validateVehicleInfo } from '../../utils/validateVehicleInfo';
+import { createEmptyDriverDocuments, validateDriverDocuments } from '../../utils/validateDriverDocuments';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -22,6 +24,7 @@ export default function DriverRegistrationScreen() {
   const [isComplete, setIsComplete] = useState(false);
   const [personalInfo, setPersonalInfo] = useState(createEmptyPersonalInfo);
   const [vehicleInfo, setVehicleInfo] = useState(createEmptyVehicleInfo);
+  const [driverDocuments, setDriverDocuments] = useState(createEmptyDriverDocuments);
   const [touched, setTouched] = useState({});
   const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
   const [vehicleTouched, setVehicleTouched] = useState({});
@@ -43,8 +46,14 @@ export default function DriverRegistrationScreen() {
     [vehicleInfo, copy],
   );
   const hasVehicleInfoErrors = Object.keys(vehicleErrors).length > 0;
+  const documentErrors = useMemo(
+    () => validateDriverDocuments(driverDocuments, copy),
+    [driverDocuments, copy],
+  );
+  const hasDocumentErrors = Object.keys(documentErrors).length > 0;
   const continueDisabled = (activeStep === 0 && hasAttemptedContinue && hasPersonalInfoErrors)
-    || (activeStep === 1 && hasAttemptedVehicleContinue && hasVehicleInfoErrors);
+    || (activeStep === 1 && hasAttemptedVehicleContinue && hasVehicleInfoErrors)
+    || (activeStep === 2 && (hasPersonalInfoErrors || hasVehicleInfoErrors || hasDocumentErrors));
 
   const updatePersonalInfo = (field, value) => {
     setPersonalInfo((current) => ({ ...current, [field]: value }));
@@ -53,6 +62,11 @@ export default function DriverRegistrationScreen() {
 
   const updateVehicleInfo = (field, value) => {
     setVehicleInfo((current) => ({ ...current, [field]: value }));
+    setIsComplete(false);
+  };
+
+  const updateDriverDocuments = (field, value) => {
+    setDriverDocuments((current) => ({ ...current, [field]: value }));
     setIsComplete(false);
   };
 
@@ -199,6 +213,16 @@ export default function DriverRegistrationScreen() {
               touched={vehicleTouched}
               values={vehicleInfo}
             />
+          ) : currentStep.key === 'documents' ? (
+            <DocumentPaymentForm
+              copy={copy}
+              errors={documentErrors}
+              language={personalInfo.language}
+              onChange={updateDriverDocuments}
+              showAllErrors
+              values={driverDocuments}
+              vehicleYear={vehicleInfo.year}
+            />
           ) : (
             <RegistrationStepPlaceholder copy={copy} stepKey={currentStep.key} />
           )}
@@ -237,7 +261,7 @@ export default function DriverRegistrationScreen() {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.continueButtonText}>{isLastStep ? copy.finish : copy.continue}</Text>
+            <Text style={styles.continueButtonText}>{isLastStep ? copy.submitRegistration : copy.continue}</Text>
             <Text style={styles.continueArrow}>{isLastStep ? '✓' : '→'}</Text>
           </Pressable>
         </View>
