@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PersonalInfoForm from '../../components/registration/PersonalInfoForm';
 import DocumentPaymentForm from '../../components/registration/DocumentPaymentForm';
@@ -10,6 +10,8 @@ import translations from '../../config/registrationTranslations';
 import { createEmptyPersonalInfo, validatePersonalInfo } from '../../utils/validatePersonalInfo';
 import { createEmptyVehicleInfo, validateVehicleInfo } from '../../utils/validateVehicleInfo';
 import { createEmptyDriverDocuments, validateDriverDocuments } from '../../utils/validateDriverDocuments';
+import { saveDriverRegistration } from '../../services/driverService';
+import { uploadDriverImages } from '../../services/cloudinaryService';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -31,6 +33,7 @@ export default function DriverRegistrationScreen() {
   const [hasAttemptedVehicleContinue, setHasAttemptedVehicleContinue] = useState(false);
   const [personalFormOffset, setPersonalFormOffset] = useState(0);
   const [vehicleFormOffset, setVehicleFormOffset] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
   const scrollRef = useRef(null);
 
   const copy = translations[personalInfo.language] || translations.es;
@@ -120,6 +123,30 @@ export default function DriverRegistrationScreen() {
     setActiveStep(step);
   };
 
+  const submitRegistration = async () => {
+    if (hasPersonalInfoErrors || hasVehicleInfoErrors || hasDocumentErrors) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const [uploadedPersonalInfo, uploadedVehicleInfo, uploadedDocuments] = await uploadDriverImages(
+        personalInfo,
+        vehicleInfo,
+        driverDocuments,
+      );
+      await saveDriverRegistration(uploadedPersonalInfo, uploadedVehicleInfo, uploadedDocuments);
+
+      setIsComplete(true);
+
+    } catch (error) {
+      console.error('No fue posible guardar el registro:', error);
+      Alert.alert(copy.uploadErrorTitle, error.message || copy.uploadErrorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const continueRegistration = () => {
     if (activeStep === 0) {
       if (hasPersonalInfoErrors) {
@@ -142,7 +169,7 @@ export default function DriverRegistrationScreen() {
     }
 
     if (isLastStep) {
-      setIsComplete(true);
+      submitRegistration();
       return;
     }
     setActiveStep(activeStep + 1);
@@ -253,7 +280,7 @@ export default function DriverRegistrationScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: continueDisabled }}
-            disabled={continueDisabled}
+            disabled={continueDisabled || isSaving}
             onPress={continueRegistration}
             style={({ pressed }) => [
               styles.continueButton,
