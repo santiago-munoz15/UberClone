@@ -14,6 +14,7 @@ const driverHomeTranslations = {
     updated: 'Actualización local',
     noGps: 'No se solicitan permisos ni se usa GPS.',
     previewRequest: 'Probar solicitud entrante simulada',
+    previewEarnings: 'Consultar ganancias',
     backToRegistration: 'Volver al registro',
   },
   en: {
@@ -31,6 +32,7 @@ const driverHomeTranslations = {
     updated: 'Local refresh',
     noGps: 'No location permission or GPS is used.',
     previewRequest: 'Preview a simulated incoming request',
+    previewEarnings: 'View earnings',
     backToRegistration: 'Back to registration',
   },
 };

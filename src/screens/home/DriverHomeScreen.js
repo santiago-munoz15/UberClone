@@ -85,6 +85,16 @@ export default function DriverHomeScreen() {
           </Link>
         ) : null}
 
+        <Link href="/earnings" asChild>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.earningsButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.earningsButtonText}>{copy.previewEarnings}</Text>
+            <Text style={styles.requestPreviewArrow}>→</Text>
+          </Pressable>
+        </Link>
+
         <Link href="/" asChild>
           <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
             <Text style={styles.backLinkText}>{copy.backToRegistration}</Text>
@@ -186,6 +196,18 @@ const styles = StyleSheet.create({
   },
   requestPreviewButtonText: { color: COLORS.white, fontSize: 12, fontWeight: '800' },
   requestPreviewArrow: { color: COLORS.accent, fontSize: 17, fontWeight: '800', marginLeft: 9 },
+  earningsButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderColor: '#D8DBD3',
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: 'row',
+    height: 50,
+    justifyContent: 'center',
+    marginTop: 11,
+  },
+  earningsButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
   backLink: { alignItems: 'center', alignSelf: 'center', marginTop: 15, padding: 10 },
   backLinkText: { color: COLORS.ink, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   pressed: { opacity: 0.74 },
