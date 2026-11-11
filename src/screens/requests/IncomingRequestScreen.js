@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import incomingRequestTranslations from '../../config/incomingRequestTranslations';
 import { calculateTripEarnings } from '../../config/pricing';
@@ -8,6 +8,7 @@ import useIncomingRequestCountdown, {
   INCOMING_REQUEST_TIMEOUT_SECONDS,
 } from '../../hooks/useIncomingRequestCountdown';
 import { transitionIncomingRequest } from '../../utils/transitionIncomingRequest';
+import { useDriverTrip } from '../../context/DriverTripContext';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -24,6 +25,8 @@ const currencyFormatter = new Intl.NumberFormat('es-CO', {
 });
 
 export default function IncomingRequestScreen() {
+  const router = useRouter();
+  const { startTrip } = useDriverTrip();
   const copy = incomingRequestTranslations.es;
   const [request, setRequest] = useState(createMockIncomingRequest);
   const earnings = useMemo(
@@ -33,7 +36,14 @@ export default function IncomingRequestScreen() {
   const finishRequest = useCallback((status, cancellationReason = null) => {
     setRequest((current) => transitionIncomingRequest(current, status, cancellationReason));
   }, []);
-  const acceptRequest = useCallback(() => finishRequest('accepted'), [finishRequest]);
+  const acceptRequest = useCallback(() => {
+    if (request.status !== 'requested') return;
+    const acceptedRequest = transitionIncomingRequest(request, 'accepted');
+    if (acceptedRequest.status !== 'accepted' || !startTrip(acceptedRequest)) return;
+
+    finishRequest('accepted');
+    router.push('/active-trip');
+  }, [finishRequest, request, router, startTrip]);
   const rejectRequest = useCallback(
     (reason = 'driver_rejected') => finishRequest('cancelled', reason),
     [finishRequest],
