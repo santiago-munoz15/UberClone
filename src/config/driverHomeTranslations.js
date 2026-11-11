@@ -15,6 +15,7 @@ const driverHomeTranslations = {
     noGps: 'No se solicitan permisos ni se usa GPS.',
     previewRequest: 'Probar solicitud entrante simulada',
     previewEarnings: 'Consultar ganancias',
+    previewTripHistory: 'Consultar historial de viajes',
     backToRegistration: 'Volver al registro',
   },
   en: {
@@ -33,6 +34,7 @@ const driverHomeTranslations = {
     noGps: 'No location permission or GPS is used.',
     previewRequest: 'Preview a simulated incoming request',
     previewEarnings: 'View earnings',
+    previewTripHistory: 'View trip history',
     backToRegistration: 'Back to registration',
   },
 };

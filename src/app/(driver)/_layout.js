@@ -10,6 +10,8 @@ export default function DriverFlowLayout() {
         <Stack.Screen name="active-trip" />
         <Stack.Screen name="trip-payment-summary" />
         <Stack.Screen name="earnings" />
+        <Stack.Screen name="trip-history" />
+        <Stack.Screen name="trip-history-detail" />
       </Stack>
     </DriverTripProvider>
   );

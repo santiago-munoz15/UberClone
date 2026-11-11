@@ -1,14 +1,44 @@
 import { calculateTripEarnings } from '../config/pricing';
 
-const PERIODS = ['today', 'week', 'month'];
+const PERIODS = ['all', 'today', 'week', 'month', 'custom'];
 
 function getLocalDayStart(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function getPeriodStart(period, now) {
-  const start = getLocalDayStart(now);
+function parseLocalDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return getLocalDayStart(value);
+  }
+  if (typeof value !== 'string') return null;
 
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  if (parsed.getFullYear() !== Number(year)
+    || parsed.getMonth() !== Number(month) - 1
+    || parsed.getDate() !== Number(day)) return null;
+  return parsed;
+}
+
+function getPeriodRange(period, now, dateFrom, dateTo) {
+  if (period === 'all') return { start: null, end: null, valid: true };
+
+  if (period === 'custom') {
+    const start = dateFrom ? parseLocalDate(dateFrom) : null;
+    const endDay = dateTo ? parseLocalDate(dateTo) : null;
+    const end = endDay ? new Date(endDay) : null;
+    if (end) end.setDate(end.getDate() + 1);
+    return {
+      start,
+      end,
+      valid: (!dateFrom || start) && (!dateTo || endDay) && (!start || !endDay || start <= endDay),
+    };
+  }
+
+  const start = getLocalDayStart(now);
   if (period === 'week') {
     const daysSinceMonday = (start.getDay() + 6) % 7;
     start.setDate(start.getDate() - daysSinceMonday);
@@ -16,7 +46,11 @@ function getPeriodStart(period, now) {
     start.setDate(1);
   }
 
-  return start;
+  const end = new Date(start);
+  if (period === 'today') end.setDate(end.getDate() + 1);
+  if (period === 'week') end.setDate(end.getDate() + 7);
+  if (period === 'month') end.setMonth(end.getMonth() + 1);
+  return { start, end, valid: true };
 }
 
 function getCompletedAtDate(trip) {
@@ -31,23 +65,34 @@ function getTripAmounts(trip) {
   return { ...earnings, tipCop, generatedNetCop: earnings.driverNetCop + tipCop };
 }
 
-export function aggregateDriverEarnings(completedTrips = [], period = 'today', now = new Date()) {
-  if (!PERIODS.includes(period)) throw new Error(`Periodo de ganancias no válido: ${period}`);
+export function filterCompletedTrips(
+  completedTrips = [],
+  { period = 'all', dateFrom, dateTo, paymentMethod = 'all', now = new Date() } = {},
+) {
+  if (!PERIODS.includes(period)) throw new Error(`Periodo de viajes no valido: ${period}`);
+  const range = getPeriodRange(period, now, dateFrom, dateTo);
+  if (!range.valid) return [];
 
-  const periodStart = getPeriodStart(period, now);
-  const periodEnd = new Date(periodStart);
-  if (period === 'today') periodEnd.setDate(periodEnd.getDate() + 1);
-  if (period === 'week') periodEnd.setDate(periodEnd.getDate() + 7);
-  if (period === 'month') periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-  const trips = completedTrips
+  return completedTrips
     .filter((trip) => {
       if (trip.status !== 'completed') return false;
+      if (paymentMethod !== 'all' && trip.paymentMethod !== paymentMethod) return false;
       const completedAt = getCompletedAtDate(trip);
-      return completedAt && completedAt >= periodStart && completedAt < periodEnd;
+      return completedAt
+        && (!range.start || completedAt >= range.start)
+        && (!range.end || completedAt < range.end);
     })
-    .map((trip) => ({ ...trip, ...getTripAmounts(trip) }))
+    .slice()
     .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+}
+
+export function aggregateDriverEarnings(completedTrips = [], period = 'today', now = new Date()) {
+  if (!PERIODS.includes(period) || period === 'all' || period === 'custom') {
+    throw new Error(`Periodo de ganancias no valido: ${period}`);
+  }
+
+  const trips = filterCompletedTrips(completedTrips, { period, now })
+    .map((trip) => ({ ...trip, ...getTripAmounts(trip) }));
 
   const totals = trips.reduce((result, trip) => {
     result.totalInvoicedCop += trip.grossFareCop;

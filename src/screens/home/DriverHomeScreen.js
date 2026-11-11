@@ -95,6 +95,16 @@ export default function DriverHomeScreen() {
           </Pressable>
         </Link>
 
+        <Link href="/trip-history" asChild>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.historyButtonText}>{copy.previewTripHistory}</Text>
+            <Text style={styles.requestPreviewArrow}>→</Text>
+          </Pressable>
+        </Link>
+
         <Link href="/" asChild>
           <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
             <Text style={styles.backLinkText}>{copy.backToRegistration}</Text>
@@ -208,6 +218,18 @@ const styles = StyleSheet.create({
     marginTop: 11,
   },
   earningsButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
+  historyButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderColor: '#D8DBD3',
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: 'row',
+    height: 50,
+    justifyContent: 'center',
+    marginTop: 9,
+  },
+  historyButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
   backLink: { alignItems: 'center', alignSelf: 'center', marginTop: 15, padding: 10 },
   backLinkText: { color: COLORS.ink, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   pressed: { opacity: 0.74 },

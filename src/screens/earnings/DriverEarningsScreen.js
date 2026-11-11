@@ -96,7 +96,14 @@ export default function DriverEarningsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{copy.history}</Text>
+          <View style={styles.historyHeader}>
+            <Text style={styles.sectionTitle}>{copy.history}</Text>
+            <Link href="/trip-history" asChild>
+              <Pressable accessibilityRole="button" style={styles.historyLink}>
+                <Text style={styles.historyLinkText}>{copy.viewAllTrips}</Text>
+              </Pressable>
+            </Link>
+          </View>
           {summary.trips.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>{copy.noTripsTitle}</Text>
@@ -190,6 +197,9 @@ const styles = StyleSheet.create({
   metricValue: { color: COLORS.ink, fontSize: 16, fontWeight: '800', marginTop: 6 },
   section: { marginTop: 20 },
   sectionTitle: { color: COLORS.ink, fontSize: 15, fontWeight: '900', marginBottom: 10 },
+  historyHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  historyLink: { padding: 6 },
+  historyLinkText: { color: '#596526', fontSize: 10, fontWeight: '800', textDecorationLine: 'underline' },
   balanceCard: { backgroundColor: COLORS.white, borderRadius: 17, paddingHorizontal: 15, paddingVertical: 7 },
   balanceSubheading: { color: COLORS.ink, fontSize: 12, fontWeight: '800', paddingTop: 10 },
   summaryRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9 },
