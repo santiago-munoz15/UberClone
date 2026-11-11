@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PersonalInfoForm from '../../components/registration/PersonalInfoForm';
@@ -184,10 +184,11 @@ export default function DriverRegistrationScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      <View style={styles.page}>
+      <KeyboardAvoidingView behavior="padding" style={styles.page}>
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -305,7 +306,7 @@ export default function DriverRegistrationScreen() {
             <Text style={styles.continueArrow}>{isLastStep ? '✓' : '→'}</Text>
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

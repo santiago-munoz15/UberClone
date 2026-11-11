@@ -82,6 +82,10 @@ export default function DocumentPaymentForm({ values, errors, touched = {}, show
                 key={choice}
                 onPress={() => {
                   onChange('inspectionApplicable', choice);
+                  if (choice === 'no') {
+                    onChange('inspectionPhoto', '');
+                    onChange('inspectionExpiry', '');
+                  }
                 }}
                 style={[styles.choiceButton, selected && styles.selectedChoice]}
               >
