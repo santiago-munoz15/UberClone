@@ -16,6 +16,8 @@ const driverHomeTranslations = {
     previewRequest: 'Probar solicitud entrante simulada',
     previewEarnings: 'Consultar ganancias',
     previewTripHistory: 'Consultar historial de viajes',
+    openProfile: 'Ver perfil del conductor',
+    openSettings: 'Configuración',
     backToRegistration: 'Volver al registro',
   },
   en: {
@@ -35,6 +37,8 @@ const driverHomeTranslations = {
     previewRequest: 'Preview a simulated incoming request',
     previewEarnings: 'View earnings',
     previewTripHistory: 'View trip history',
+    openProfile: 'View driver profile',
+    openSettings: 'Settings',
     backToRegistration: 'Back to registration',
   },
 };
