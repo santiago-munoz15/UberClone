@@ -7,6 +7,7 @@ import tripPaymentTranslations from '../../config/tripPaymentTranslations';
 import { calculateTripEarnings } from '../../config/pricing';
 import { useDriverTrip } from '../../context/DriverTripContext';
 import { MOCK_TRIP_PAYMENT_SCENARIOS } from '../../data/mockTripPaymentScenarios';
+import TripNavigationMap from '../../components/trips/TripNavigationMap';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
 
 const COLORS = {
@@ -63,8 +64,6 @@ export default function ActiveTripScreen() {
   const [titleKey, messageKey] = STATUS_COPY[activeTrip.status] ?? STATUS_COPY.accepted;
   const isCompleted = activeTrip.status === 'completed';
   const isInProgress = activeTrip.status === 'in_progress';
-  const routePoint = isInProgress ? activeTrip.destination : activeTrip.origin;
-  const routeLabel = isInProgress ? copy.destination : copy.origin;
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -85,10 +84,16 @@ export default function ActiveTripScreen() {
           <Text style={styles.statusMessage}>{copy[messageKey]}</Text>
         </View>
 
+        <TripNavigationMap
+          coordinates={activeTrip.simulatedCoordinates}
+          language={language}
+          status={activeTrip.status}
+        />
+
         <View style={styles.routeCard}>
-          {!isInProgress && <RoutePoint label={copy.origin} value={activeTrip.origin} isOrigin />}
-          {!isInProgress && <View style={styles.routeConnector} />}
-          <RoutePoint label={routeLabel} value={routePoint} isDestination={isInProgress} />
+          <RoutePoint label={copy.origin} value={activeTrip.origin} isOrigin={!isInProgress} />
+          <View style={styles.routeConnector} />
+          <RoutePoint label={copy.destination} value={activeTrip.destination} isDestination={isInProgress} />
           {isInProgress && (
             <View style={styles.tripMeta}>
               <Text style={styles.metaText}>{`${activeTrip.distanceKm.toFixed(1)} ${copy.km}`}</Text>
