@@ -6,7 +6,7 @@ export default function RootLayout() {
     <DriverAvailabilityProvider>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F5F2' } }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="driver-preview" />
+        <Stack.Screen name="(driver)" />
       </Stack>
     </DriverAvailabilityProvider>
   );

@@ -13,6 +13,7 @@ const driverHomeTranslations = {
     locationSource: 'Ubicación simulada',
     updated: 'Actualización local',
     noGps: 'No se solicitan permisos ni se usa GPS.',
+    previewRequest: 'Probar solicitud entrante simulada',
     backToRegistration: 'Volver al registro',
   },
   en: {
@@ -29,6 +30,7 @@ const driverHomeTranslations = {
     locationSource: 'Simulated location',
     updated: 'Local refresh',
     noGps: 'No location permission or GPS is used.',
+    previewRequest: 'Preview a simulated incoming request',
     backToRegistration: 'Back to registration',
   },
 };

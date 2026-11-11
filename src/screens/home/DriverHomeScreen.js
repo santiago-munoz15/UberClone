@@ -73,6 +73,18 @@ export default function DriverHomeScreen() {
           <Text style={styles.gpsNoteText}>{copy.noGps}</Text>
         </View>
 
+        {__DEV__ ? (
+          <Link href="/incoming-request" asChild>
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.requestPreviewButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.requestPreviewButtonText}>{copy.previewRequest}</Text>
+              <Text style={styles.requestPreviewArrow}>→</Text>
+            </Pressable>
+          </Link>
+        ) : null}
+
         <Link href="/" asChild>
           <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
             <Text style={styles.backLinkText}>{copy.backToRegistration}</Text>
@@ -163,6 +175,17 @@ const styles = StyleSheet.create({
   toggleThumbOn: { alignSelf: 'flex-end' },
   gpsNote: { alignItems: 'center', paddingHorizontal: 6, paddingTop: 12 },
   gpsNoteText: { color: COLORS.muted, fontSize: 10, textAlign: 'center' },
+  requestPreviewButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.ink,
+    borderRadius: 15,
+    flexDirection: 'row',
+    height: 52,
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+  requestPreviewButtonText: { color: COLORS.white, fontSize: 12, fontWeight: '800' },
+  requestPreviewArrow: { color: COLORS.accent, fontSize: 17, fontWeight: '800', marginLeft: 9 },
   backLink: { alignItems: 'center', alignSelf: 'center', marginTop: 15, padding: 10 },
   backLinkText: { color: COLORS.ink, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   pressed: { opacity: 0.74 },
