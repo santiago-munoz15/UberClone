@@ -1,0 +1,36 @@
+const driverHomeTranslations = {
+  es: {
+    title: 'Inicio del conductor',
+    subtitle: 'Tu actividad y ubicación se muestran en esta vista local.',
+    developmentBadge: 'VISTA LOCAL DE DESARROLLO',
+    simulatedNotice: 'Datos simulados · No confirma aprobación del conductor',
+    available: 'Disponible',
+    unavailable: 'No disponible',
+    availabilityAvailableHint: 'La disponibilidad solo cambia en esta pantalla de prueba.',
+    availabilityUnavailableHint: 'Activa la disponibilidad para probar el estado local.',
+    mapTitle: 'Tu ubicación de prueba',
+    mapLabel: 'MAPA ILUSTRATIVO',
+    locationSource: 'Ubicación simulada',
+    updated: 'Actualización local',
+    noGps: 'No se solicitan permisos ni se usa GPS.',
+    backToRegistration: 'Volver al registro',
+  },
+  en: {
+    title: 'Driver home',
+    subtitle: 'Your activity and location appear in this local preview.',
+    developmentBadge: 'LOCAL DEVELOPMENT PREVIEW',
+    simulatedNotice: 'Simulated data · Does not confirm driver approval',
+    available: 'Available',
+    unavailable: 'Unavailable',
+    availabilityAvailableHint: 'Availability changes only in this preview screen.',
+    availabilityUnavailableHint: 'Turn availability on to try the local state.',
+    mapTitle: 'Your test location',
+    mapLabel: 'ILLUSTRATIVE MAP',
+    locationSource: 'Simulated location',
+    updated: 'Local refresh',
+    noGps: 'No location permission or GPS is used.',
+    backToRegistration: 'Back to registration',
+  },
+};
+
+export default driverHomeTranslations;

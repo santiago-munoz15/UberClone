@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PersonalInfoForm from '../../components/registration/PersonalInfoForm';
 import DocumentPaymentForm from '../../components/registration/DocumentPaymentForm';
@@ -203,6 +204,18 @@ export default function DriverRegistrationScreen() {
           <Text style={styles.heading}>{copy.heading}</Text>
           <Text style={styles.intro}>{copy.intro}</Text>
 
+          {__DEV__ ? (
+            <Link href="/driver-preview" asChild>
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.developmentEntry, pressed && styles.pressed]}
+              >
+                <Text style={styles.developmentEntryText}>Abrir vista local de desarrollo</Text>
+                <Text style={styles.developmentEntryArrow}>→</Text>
+              </Pressable>
+            </Link>
+          ) : null}
+
           <View style={styles.progressHeader}>
             <Text style={styles.progressTitle}>{copy.progressTitle}</Text>
             <Text style={styles.progressCount}>{`0${activeStep + 1} / 03`}</Text>
@@ -301,6 +314,19 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.background, flex: 1 },
   page: { flex: 1 },
   scrollContent: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 20 },
+  developmentEntry: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF3DE',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  developmentEntryText: { color: '#596526', fontSize: 11, fontWeight: '700' },
+  developmentEntryArrow: { color: '#596526', fontSize: 14, fontWeight: '800' },
   brandRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   brandMark: {
     alignItems: 'center',
