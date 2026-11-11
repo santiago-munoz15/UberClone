@@ -4,9 +4,9 @@ const ALLOWED_TRANSITIONS = {
   in_progress: 'completed',
 };
 
-export function transitionDriverTrip(trip, nextStatus) {
+export function transitionDriverTrip(trip, nextStatus, transitionData = {}) {
   if (!trip || trip.status === 'completed') return trip;
   if (ALLOWED_TRANSITIONS[trip.status] !== nextStatus) return trip;
 
-  return { ...trip, status: nextStatus };
+  return { ...trip, ...transitionData, status: nextStatus };
 }

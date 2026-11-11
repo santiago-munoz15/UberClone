@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { Link, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import driverTripTranslations from '../../config/driverTripTranslations';
+import tripPaymentTranslations from '../../config/tripPaymentTranslations';
 import { calculateTripEarnings } from '../../config/pricing';
 import { useDriverTrip } from '../../context/DriverTripContext';
+import { MOCK_TRIP_PAYMENT_SCENARIOS } from '../../data/mockTripPaymentScenarios';
+import { formatCopCurrency } from '../../utils/formatCopCurrency';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -13,12 +16,6 @@ const COLORS = {
   muted: '#71766A',
   white: '#FFFFFF',
 };
-
-const currencyFormatter = new Intl.NumberFormat('es-CO', {
-  currency: 'COP',
-  maximumFractionDigits: 0,
-  style: 'currency',
-});
 
 const STATUS_COPY = {
   accepted: ['acceptedTitle', 'acceptedMessage'],
@@ -29,12 +26,22 @@ const STATUS_COPY = {
 
 export default function ActiveTripScreen() {
   const router = useRouter();
-  const { activeTrip, transitionActiveTrip } = useDriverTrip();
+  const completionLock = useRef(false);
+  const {
+    activeTrip,
+    transitionActiveTrip,
+    selectPaymentScenario,
+    completeActiveTrip,
+  } = useDriverTrip();
   const language = activeTrip?.language === 'en' ? 'en' : 'es';
   const copy = driverTripTranslations[language];
+  const paymentCopy = tripPaymentTranslations[language];
+  const fareCop = activeTrip?.status === 'completed'
+    ? activeTrip.finalFareCop
+    : activeTrip?.estimatedFareCop;
   const earnings = useMemo(
-    () => calculateTripEarnings(activeTrip?.estimatedFareCop ?? 0),
-    [activeTrip?.estimatedFareCop],
+    () => calculateTripEarnings(fareCop ?? 0),
+    [fareCop],
   );
 
   if (!activeTrip) {
@@ -98,21 +105,61 @@ export default function ActiveTripScreen() {
           </View>
         )}
 
+        {isInProgress && (
+          <View style={styles.paymentScenarioCard}>
+            <Text style={styles.scenarioTitle}>{paymentCopy.scenarioTitle}</Text>
+            <Text style={styles.scenarioHint}>{paymentCopy.scenarioHint}</Text>
+            <View style={styles.scenarioList}>
+              {MOCK_TRIP_PAYMENT_SCENARIOS.map((scenario) => {
+                const isSelected = activeTrip.paymentScenarioId === scenario.id;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    key={scenario.id}
+                    onPress={() => selectPaymentScenario(scenario.id)}
+                    style={[styles.scenarioOption, isSelected && styles.scenarioOptionSelected]}
+                  >
+                    <Text style={[styles.scenarioOptionTitle, isSelected && styles.scenarioOptionTitleSelected]}>
+                      {paymentCopy[scenario.titleKey]}
+                    </Text>
+                    <Text style={[styles.scenarioOptionStatus, isSelected && styles.scenarioOptionTitleSelected]}>
+                      {paymentCopy[scenario.statusKey]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         <View style={styles.fareCard}>
           <Text style={styles.fareHeading}>{copy.fare}</Text>
-          <Text style={styles.grossFare}>{currencyFormatter.format(earnings.grossFareCop)}</Text>
+          <Text style={styles.grossFare}>{formatCopCurrency(earnings.grossFareCop)}</Text>
           <View style={styles.divider} />
-          <DetailRow label={copy.commission} value={`−${currencyFormatter.format(earnings.platformCommissionCop)}`} />
+          <DetailRow label={copy.commission} value={`−${formatCopCurrency(earnings.platformCommissionCop)}`} />
           <View style={styles.netRow}>
             <Text style={styles.netLabel}>{copy.net}</Text>
-            <Text style={styles.netValue}>{currencyFormatter.format(earnings.driverNetCop)}</Text>
+            <Text style={styles.netValue}>{formatCopCurrency(earnings.driverNetCop)}</Text>
           </View>
         </View>
 
         {!isCompleted ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => transitionActiveTrip(isInProgress ? 'completed' : activeTrip.status === 'accepted' ? 'arriving' : 'in_progress')}
+            onPress={() => {
+              if (isInProgress) {
+                if (completionLock.current) return;
+                completionLock.current = true;
+                if (completeActiveTrip()) {
+                  router.push('/trip-payment-summary');
+                } else {
+                  completionLock.current = false;
+                }
+                return;
+              }
+              transitionActiveTrip(activeTrip.status === 'accepted' ? 'arriving' : 'in_progress');
+            }}
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
           >
             <Text style={styles.primaryButtonText}>
@@ -120,11 +167,20 @@ export default function ActiveTripScreen() {
             </Text>
           </Pressable>
         ) : (
-          <Link href="/driver-preview" asChild>
-            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
-              <Text style={styles.primaryButtonText}>{copy.backHome}</Text>
+          <View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/trip-payment-summary')}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.primaryButtonText}>{paymentCopy.viewPaymentSummary}</Text>
             </Pressable>
-          </Link>
+            <Link href="/driver-preview" asChild>
+              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+                <Text style={styles.secondaryButtonText}>{copy.backHome}</Text>
+              </Pressable>
+            </Link>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -190,6 +246,15 @@ const styles = StyleSheet.create({
   metricCard: { backgroundColor: COLORS.white, borderRadius: 16, flex: 1, padding: 14 },
   metricLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '600' },
   metricValue: { color: COLORS.ink, fontSize: 16, fontWeight: '800', marginTop: 6 },
+  paymentScenarioCard: { backgroundColor: COLORS.white, borderRadius: 16, marginTop: 12, padding: 14 },
+  scenarioTitle: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
+  scenarioHint: { color: COLORS.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
+  scenarioList: { gap: 8, marginTop: 10 },
+  scenarioOption: { borderColor: '#E1E4DC', borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 9 },
+  scenarioOptionSelected: { backgroundColor: '#EFF3DE', borderColor: '#9DB52C' },
+  scenarioOptionTitle: { color: COLORS.ink, fontSize: 11, fontWeight: '700' },
+  scenarioOptionTitleSelected: { color: '#506518' },
+  scenarioOptionStatus: { color: COLORS.muted, fontSize: 9, marginTop: 3 },
   fareCard: { backgroundColor: COLORS.white, borderRadius: 18, marginTop: 12, paddingHorizontal: 15 },
   fareHeading: { color: COLORS.muted, fontSize: 10, fontWeight: '700', marginTop: 14 },
   grossFare: { color: COLORS.ink, fontSize: 23, fontWeight: '900', marginBottom: 12, marginTop: 4 },
@@ -202,6 +267,8 @@ const styles = StyleSheet.create({
   netValue: { color: '#506518', fontSize: 17, fontWeight: '900' },
   primaryButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 15, justifyContent: 'center', marginTop: 18, minHeight: 54, paddingHorizontal: 16 },
   primaryButtonText: { color: COLORS.white, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  secondaryButton: { alignItems: 'center', borderColor: '#D8DBD3', borderRadius: 15, borderWidth: 1, justifyContent: 'center', marginTop: 10, minHeight: 50, paddingHorizontal: 16 },
+  secondaryButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '700', textAlign: 'center' },
   emptyState: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   pressed: { opacity: 0.76 },
 });
