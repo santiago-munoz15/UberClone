@@ -5,6 +5,7 @@ import {
   getDefaultTripPaymentScenario,
 } from '../data/mockTripPaymentScenarios';
 import { transitionDriverTrip } from '../utils/transitionDriverTrip';
+import useTripLocation from '../hooks/useTripLocation';
 
 const DriverTripContext = createContext(null);
 
@@ -13,6 +14,7 @@ export function DriverTripProvider({ children }) {
   const [completedTrips, setCompletedTrips] = useState([]);
   const tripSequence = useRef(0);
   const recordedTripIds = useRef(new Set());
+  const tripLocation = useTripLocation(Boolean(activeTrip && activeTrip.status !== 'completed'), activeTrip?.tripId);
 
   const startTrip = useCallback((request) => {
     if (!request?.isSimulated || request.status !== 'accepted') return false;
@@ -31,8 +33,10 @@ export function DriverTripProvider({ children }) {
   }, []);
 
   const transitionActiveTrip = useCallback((nextStatus) => {
-    setActiveTrip((current) => transitionDriverTrip(current, nextStatus));
-  }, []);
+    setActiveTrip((current) => transitionDriverTrip(current, nextStatus, {
+      currentLocation: tripLocation.status === 'ready' ? tripLocation.location : null,
+    }));
+  }, [tripLocation.location, tripLocation.status]);
 
   const selectPaymentScenario = useCallback((scenarioId) => {
     const scenario = findMockTripPaymentScenario(scenarioId);
@@ -90,8 +94,8 @@ export function DriverTripProvider({ children }) {
   }, [activeTrip]);
 
   const value = useMemo(
-    () => ({ activeTrip, completedTrips, startTrip, transitionActiveTrip, selectPaymentScenario, completeActiveTrip }),
-    [activeTrip, completedTrips, startTrip, transitionActiveTrip, selectPaymentScenario, completeActiveTrip],
+    () => ({ activeTrip, completedTrips, tripLocation, startTrip, transitionActiveTrip, selectPaymentScenario, completeActiveTrip }),
+    [activeTrip, completedTrips, tripLocation, startTrip, transitionActiveTrip, selectPaymentScenario, completeActiveTrip],
   );
 
   return <DriverTripContext.Provider value={value}>{children}</DriverTripContext.Provider>;

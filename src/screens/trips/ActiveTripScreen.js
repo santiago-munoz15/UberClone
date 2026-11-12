@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { useDriverTrip } from '../../context/DriverTripContext';
 import { MOCK_TRIP_PAYMENT_SCENARIOS } from '../../data/mockTripPaymentScenarios';
 import TripNavigationMap from '../../components/trips/TripNavigationMap';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
+import useTripRoute from '../../hooks/useTripRoute';
+import { validatePickupProximity } from '../../utils/pickupProximity';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -30,6 +32,7 @@ export default function ActiveTripScreen() {
   const completionLock = useRef(false);
   const {
     activeTrip,
+    tripLocation,
     transitionActiveTrip,
     selectPaymentScenario,
     completeActiveTrip,
@@ -37,6 +40,16 @@ export default function ActiveTripScreen() {
   const language = activeTrip?.language === 'en' ? 'en' : 'es';
   const copy = driverTripTranslations[language];
   const paymentCopy = tripPaymentTranslations[language];
+  const [validationTime, setValidationTime] = useState(0);
+  useEffect(() => {
+    if (activeTrip?.status !== 'arriving') return undefined;
+    const initialUpdate = setTimeout(() => setValidationTime(Date.now()), 0);
+    const timer = setInterval(() => setValidationTime(Date.now()), 1000);
+    return () => {
+      clearTimeout(initialUpdate);
+      clearInterval(timer);
+    };
+  }, [activeTrip?.status]);
   const fareCop = activeTrip?.status === 'completed'
     ? activeTrip.finalFareCop
     : activeTrip?.estimatedFareCop;
@@ -44,6 +57,14 @@ export default function ActiveTripScreen() {
     () => calculateTripEarnings(fareCop ?? 0),
     [fareCop],
   );
+  const tripRoute = useTripRoute({
+    status: activeTrip?.status,
+    location: tripLocation.location,
+    pickup: activeTrip?.pickupLocation,
+    destination: activeTrip?.destinationLocation,
+  });
+  const route = tripLocation.location ? tripRoute.route : null;
+  const routeStatus = tripLocation.location ? tripRoute.status : 'idle';
 
   if (!activeTrip) {
     return (
@@ -64,6 +85,13 @@ export default function ActiveTripScreen() {
   const [titleKey, messageKey] = STATUS_COPY[activeTrip.status] ?? STATUS_COPY.accepted;
   const isCompleted = activeTrip.status === 'completed';
   const isInProgress = activeTrip.status === 'in_progress';
+  const isArriving = activeTrip.status === 'arriving';
+  const pickupValidation = validatePickupProximity(
+    tripLocation.status === 'ready' ? tripLocation.location : null,
+    activeTrip.pickupLocation,
+    validationTime,
+  );
+  const boardingDisabled = isArriving && !pickupValidation.allowed;
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -85,8 +113,18 @@ export default function ActiveTripScreen() {
         </View>
 
         <TripNavigationMap
-          coordinates={activeTrip.simulatedCoordinates}
+          compassStatus={tripLocation.compassStatus}
+          deviceHeading={tripLocation.deviceHeading}
           language={language}
+          location={tripLocation.location}
+          locationStatus={tripLocation.status}
+          onRetryLocation={tripLocation.retry}
+          onRetryRoute={tripRoute.retry}
+          pickup={activeTrip.pickupLocation}
+          destination={activeTrip.destinationLocation}
+          route={route}
+          routeError={tripRoute.error}
+          routeStatus={routeStatus}
           status={activeTrip.status}
         />
 
@@ -94,19 +132,19 @@ export default function ActiveTripScreen() {
           <RoutePoint label={copy.origin} value={activeTrip.origin} isOrigin={!isInProgress} />
           <View style={styles.routeConnector} />
           <RoutePoint label={copy.destination} value={activeTrip.destination} isDestination={isInProgress} />
-          {isInProgress && (
+          {isInProgress && route && (
             <View style={styles.tripMeta}>
-              <Text style={styles.metaText}>{`${activeTrip.distanceKm.toFixed(1)} ${copy.km}`}</Text>
+              <Text style={styles.metaText}>{`${route.distanceKm.toFixed(1)} ${copy.km}`}</Text>
               <Text style={styles.metaDot}>·</Text>
-              <Text style={styles.metaText}>{`${activeTrip.estimatedDurationMinutes} ${copy.minutes}`}</Text>
+              <Text style={styles.metaText}>{`${Math.ceil(route.durationMinutes)} ${copy.minutes}`}</Text>
             </View>
           )}
         </View>
 
-        {!isInProgress && !isCompleted && (
+        {!isCompleted && route && (
           <View style={styles.metricsRow}>
-            <Metric label={copy.distance} value={`${activeTrip.distanceKm.toFixed(1)} ${copy.km}`} />
-            <Metric label={copy.duration} value={`${activeTrip.estimatedDurationMinutes} ${copy.minutes}`} />
+            <Metric label={copy.distance} value={`${route.distanceKm.toFixed(1)} ${copy.km}`} />
+            <Metric label={copy.duration} value={`${Math.ceil(route.durationMinutes)} ${copy.minutes}`} />
           </View>
         )}
 
@@ -152,6 +190,8 @@ export default function ActiveTripScreen() {
         {!isCompleted ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: boardingDisabled }}
+            disabled={boardingDisabled}
             onPress={() => {
               if (isInProgress) {
                 if (completionLock.current) return;
@@ -163,9 +203,10 @@ export default function ActiveTripScreen() {
                 }
                 return;
               }
+              if (isArriving && !pickupValidation.allowed) return;
               transitionActiveTrip(activeTrip.status === 'accepted' ? 'arriving' : 'in_progress');
             }}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.primaryButton, boardingDisabled && styles.disabledButton, pressed && !boardingDisabled && styles.pressed]}
           >
             <Text style={styles.primaryButtonText}>
               {copy[isInProgress ? 'finishTrip' : activeTrip.status === 'accepted' ? 'goToPassenger' : 'passengerOnboard']}
@@ -187,9 +228,28 @@ export default function ActiveTripScreen() {
             </Link>
           </View>
         )}
+        {isArriving && (
+          <Text accessibilityLiveRegion="polite" style={[styles.pickupValidation, pickupValidation.allowed && styles.pickupValidationReady]}>
+            {getPickupValidationMessage(copy, pickupValidation)}
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function getPickupValidationMessage(copy, validation) {
+  if (validation.reason === 'ready') {
+    return copy.pickupReady.replace('{distance}', `${Math.ceil(validation.distanceMeters)}`);
+  }
+  if (validation.reason === 'too_far') {
+    return copy.pickupRemaining.replace('{distance}', `${Math.ceil(validation.distanceMeters)}`);
+  }
+  if (validation.reason === 'accuracy_insufficient') {
+    return copy.pickupAccuracyInsufficient.replace('{distance}', `${Math.ceil(validation.distanceMeters)}`);
+  }
+  if (validation.reason === 'location_stale') return copy.pickupLocationStale;
+  return copy.pickupLocationUnavailable;
 }
 
 function RoutePoint({ label, value, isOrigin = false, isDestination = false }) {
@@ -271,6 +331,9 @@ const styles = StyleSheet.create({
   netLabel: { color: COLORS.ink, flex: 1, fontSize: 11, fontWeight: '800', paddingRight: 8 },
   netValue: { color: '#506518', fontSize: 17, fontWeight: '900' },
   primaryButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 15, justifyContent: 'center', marginTop: 18, minHeight: 54, paddingHorizontal: 16 },
+  disabledButton: { backgroundColor: '#A9ADA2' },
+  pickupValidation: { color: '#8E4B21', fontSize: 12, lineHeight: 18, marginTop: 10, textAlign: 'center' },
+  pickupValidationReady: { color: '#4E7120' },
   primaryButtonText: { color: COLORS.white, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   secondaryButton: { alignItems: 'center', borderColor: '#D8DBD3', borderRadius: 15, borderWidth: 1, justifyContent: 'center', marginTop: 10, minHeight: 50, paddingHorizontal: 16 },
   secondaryButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '700', textAlign: 'center' },
