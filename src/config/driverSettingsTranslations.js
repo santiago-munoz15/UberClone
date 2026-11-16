@@ -10,7 +10,8 @@ const driverSettingsTranslations = {
     availableHint: 'Puedes recibir solicitudes en esta simulación.',
     unavailableHint: 'No se mostrarán solicitudes mientras estés desconectado.',
     account: 'Cuenta y sesión',
-    accountMessage: 'El cierre de sesión requiere conexión con el flujo de autenticación y no está disponible aquí.',
+    accountMessage: 'La sesión de esta cuenta se cierra de forma segura en este dispositivo.',
+    signOut: 'Cerrar sesión',
     backHome: 'Volver al inicio',
   },
   en: {
@@ -24,7 +25,8 @@ const driverSettingsTranslations = {
     availableHint: 'You can receive requests in this simulation.',
     unavailableHint: 'Requests will not appear while you are offline.',
     account: 'Account and session',
-    accountMessage: 'Signing out requires the authentication flow and is not available here.',
+    accountMessage: 'This signs the account out on this device.',
+    signOut: 'Sign out',
     backHome: 'Back to driver home',
   },
 };

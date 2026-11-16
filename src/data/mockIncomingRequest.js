@@ -1,6 +1,7 @@
 export function createMockIncomingRequest() {
+  const requestId = `mock-request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
-    id: 'mock-request-001',
+    id: requestId,
     isSimulated: true,
     status: 'requested',
     cancellationReason: null,
@@ -11,7 +12,7 @@ export function createMockIncomingRequest() {
     distanceKm: 8.4,
     estimatedDurationMinutes: 24,
     category: 'UberX',
-    paymentMethod: 'Efectivo',
+    paymentMethod: 'Mercado Pago',
     estimatedFareCop: 34_000,
   };
 }

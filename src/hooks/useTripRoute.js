@@ -17,7 +17,7 @@ function distanceBetween(first, second) {
 
 function getActiveLeg(status) {
   if (status === 'accepted' || status === 'arriving') return 'pickup';
-  if (status === 'in_progress') return 'destination';
+  if (status === 'onboard' || status === 'in_progress') return 'destination';
   return null;
 }
 

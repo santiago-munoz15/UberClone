@@ -1,8 +1,9 @@
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import driverSettingsTranslations from '../../config/driverSettingsTranslations';
 import { useDriverAvailability } from '../../context/DriverAvailabilityContext';
+import { signOutDriver } from '../../services/authService';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -57,14 +58,20 @@ export default function DriverSettingsScreen() {
           <Text style={styles.sectionTitle}>{copy.account}</Text>
           <View style={styles.card}>
             <Text style={styles.sectionMessage}>{copy.accountMessage}</Text>
+            <Pressable accessibilityRole="button" onPress={signOutDriver} style={({ pressed }) => [styles.signOutButton, pressed && styles.pressed]}>
+              <Text style={styles.signOutText}>{copy.signOut}</Text>
+            </Pressable>
           </View>
         </View>
 
-        <Link href="/driver-preview" asChild>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-            <Text style={styles.backButtonText}>{copy.backHome}</Text>
-          </Pressable>
-        </Link>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.replace('/driver-preview')}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.backButtonText}>{copy.backHome}</Text>
+          <Text style={styles.backButtonArrow}>→</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -90,11 +97,14 @@ const styles = StyleSheet.create({
   unavailableDot: { backgroundColor: '#969A90' },
   statusTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '800' },
   sectionMessage: { color: COLORS.muted, fontSize: 11, lineHeight: 17, marginTop: 6 },
+  signOutButton: { alignItems: 'center', alignSelf: 'flex-start', borderColor: '#DDE0D7', borderRadius: 10, borderWidth: 1, marginTop: 14, paddingHorizontal: 13, paddingVertical: 9 },
+  signOutText: { color: COLORS.ink, fontSize: 12, fontWeight: '700' },
   toggle: { backgroundColor: '#D8DBD3', borderRadius: 18, height: 34, justifyContent: 'center', paddingHorizontal: 3, width: 58 },
   toggleOn: { backgroundColor: '#7C9820' },
   toggleThumb: { backgroundColor: COLORS.white, borderRadius: 14, height: 28, width: 28 },
   toggleThumbOn: { alignSelf: 'flex-end' },
-  backButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 14, justifyContent: 'center', marginTop: 20, minHeight: 52 },
-  backButtonText: { color: COLORS.white, fontSize: 12, fontWeight: '800' },
+  backButton: { alignItems: 'center', backgroundColor: '#235C1D', borderColor: '#1A4815', borderRadius: 16, borderWidth: 1, flexDirection: 'row', justifyContent: 'center', marginTop: 20, minHeight: 54, paddingHorizontal: 18, width: '100%' },
+  backButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '900' },
+  backButtonArrow: { color: COLORS.accent, fontSize: 19, fontWeight: '900', marginLeft: 10 },
   pressed: { opacity: 0.75 },
 });

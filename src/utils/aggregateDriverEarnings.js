@@ -59,7 +59,16 @@ function getCompletedAtDate(trip) {
 }
 
 function getTripAmounts(trip) {
-  const earnings = calculateTripEarnings(trip.finalFareCop ?? 0);
+  const fallbackEarnings = calculateTripEarnings(trip.finalFareCop ?? 0);
+  const earnings = {
+    grossFareCop: Number(trip.finalFareCop) || fallbackEarnings.grossFareCop,
+    platformCommissionCop: Number.isInteger(trip.platformCommissionCop)
+      ? trip.platformCommissionCop
+      : fallbackEarnings.platformCommissionCop,
+    driverNetCop: Number.isInteger(trip.driverNetCop)
+      ? trip.driverNetCop
+      : fallbackEarnings.driverNetCop,
+  };
   const tipCop = Math.max(0, Math.round(Number(trip.tipCop) || 0));
 
   return { ...earnings, tipCop, generatedNetCop: earnings.driverNetCop + tipCop };
@@ -75,7 +84,7 @@ export function filterCompletedTrips(
 
   return completedTrips
     .filter((trip) => {
-      if (trip.status !== 'completed') return false;
+      if (trip.status !== 'completed' && trip.status !== 'paid') return false;
       if (paymentMethod !== 'all' && trip.paymentMethod !== paymentMethod) return false;
       const completedAt = getCompletedAtDate(trip);
       return completedAt

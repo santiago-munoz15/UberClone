@@ -1,14 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link, useRouter } from 'expo-router';
-import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Redirect, useRouter } from 'expo-router';
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import incomingRequestTranslations from '../../config/incomingRequestTranslations';
-import { calculateTripEarnings } from '../../config/pricing';
+import { calculateFare } from '../../config/pricing';
 import { createMockIncomingRequest } from '../../data/mockIncomingRequest';
 import useIncomingRequestCountdown, {
   INCOMING_REQUEST_TIMEOUT_SECONDS,
 } from '../../hooks/useIncomingRequestCountdown';
+import useTripRequests from '../../hooks/useTripRequests';
 import { transitionIncomingRequest } from '../../utils/transitionIncomingRequest';
 import { useDriverTrip } from '../../context/DriverTripContext';
+import { updateTrip } from '../../services/tripService';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -26,32 +29,67 @@ const currencyFormatter = new Intl.NumberFormat('es-CO', {
 
 export default function IncomingRequestScreen() {
   const router = useRouter();
-  const { startTrip } = useDriverTrip();
+  const { activeTrip } = useDriverTrip();
+  const { incomingTrips, isHydrated, startTrip } = useTripRequests();
   const copy = incomingRequestTranslations.es;
-  const [request, setRequest] = useState(createMockIncomingRequest);
-  const earnings = useMemo(
-    () => calculateTripEarnings(request.estimatedFareCop),
-    [request.estimatedFareCop],
-  );
+  const [localRequest, setLocalRequest] = useState(() => (__DEV__ ? createMockIncomingRequest() : null));
+  const request = incomingTrips[0] ?? localRequest;
+  const earnings = useMemo(() => calculateFare({
+    category: request?.category,
+    distanceKm: request?.distanceKm,
+    durationMin: request?.estimatedDurationMinutes,
+    tip: 0,
+  }), [request?.category, request?.distanceKm, request?.estimatedDurationMinutes]);
   const finishRequest = useCallback((status, cancellationReason = null) => {
-    setRequest((current) => transitionIncomingRequest(current, status, cancellationReason));
-  }, []);
-  const acceptRequest = useCallback(() => {
-    if (request.status !== 'requested') return;
+    if (!request) return;
+    const nextRequest = transitionIncomingRequest(request, status, cancellationReason);
+    if (request.isSimulated) {
+      setLocalRequest(nextRequest);
+      return;
+    }
+    updateTrip(request.id, {
+      status,
+      ...(cancellationReason ? { cancellationReason } : {}),
+    }).catch((error) => {
+      console.error('No se pudo actualizar la solicitud en Firestore:', error);
+    });
+  }, [request]);
+  const acceptRequest = useCallback(async () => {
+    if (!isHydrated || !request || request.status !== 'requested') return;
     const acceptedRequest = transitionIncomingRequest(request, 'accepted');
-    if (acceptedRequest.status !== 'accepted' || !startTrip(acceptedRequest)) return;
+    if (acceptedRequest.status !== 'accepted' || !(await startTrip(acceptedRequest))) return;
 
     finishRequest('accepted');
-    router.push('/active-trip');
-  }, [finishRequest, request, router, startTrip]);
+    router.replace('/active-trip');
+  }, [finishRequest, isHydrated, request, router, startTrip]);
   const rejectRequest = useCallback(
     (reason = 'driver_rejected') => finishRequest('cancelled', reason),
     [finishRequest],
   );
   const expireRequest = useCallback(() => rejectRequest('timeout'), [rejectRequest]);
-  const isPending = request.status === 'requested';
-  const remainingSeconds = useIncomingRequestCountdown({ isActive: isPending, onExpire: expireRequest });
+  const isPending = request?.status === 'requested';
+  const remainingSeconds = useIncomingRequestCountdown({ isActive: isPending && isHydrated, onExpire: expireRequest });
   const timerProgress = (remainingSeconds / INCOMING_REQUEST_TIMEOUT_SECONDS) * 100;
+
+  if (activeTrip && activeTrip.status !== 'completed') return <Redirect href="/active-trip" />;
+  if (!request) {
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+        <View style={styles.emptyState}>
+          <Text style={styles.title}>{copy.title}</Text>
+          <Text style={styles.noticeText}>No hay solicitudes pendientes en este momento.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace('/driver-preview')}
+            style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.homeButtonText}>{copy.backHome}</Text>
+            <Text style={styles.homeButtonArrow}>→</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   let resultTitle = '';
   let resultMessage = '';
@@ -130,16 +168,16 @@ export default function IncomingRequestScreen() {
 
         <View style={styles.fareCard}>
           <Text style={styles.fareHeading}>{copy.fare}</Text>
-          <Text style={styles.grossFare}>{currencyFormatter.format(earnings.grossFareCop)}</Text>
+          <Text style={styles.grossFare}>{currencyFormatter.format(earnings.fare)}</Text>
           <View style={styles.divider} />
           <DetailRow
             label={copy.commission}
-            value={`−${currencyFormatter.format(earnings.platformCommissionCop)}`}
+            value={`−${currencyFormatter.format(earnings.commission)}`}
             subdued
           />
           <View style={styles.netRow}>
             <Text style={styles.netLabel}>{copy.net}</Text>
-            <Text style={styles.netValue}>{currencyFormatter.format(earnings.driverNetCop)}</Text>
+            <Text style={styles.netValue}>{currencyFormatter.format(earnings.driverEarnings)}</Text>
           </View>
         </View>
 
@@ -154,18 +192,23 @@ export default function IncomingRequestScreen() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ disabled: !isHydrated }}
+              disabled={!isHydrated}
               onPress={acceptRequest}
-              style={({ pressed }) => [styles.acceptButton, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.acceptButton, !isHydrated && styles.disabledButton, pressed && isHydrated && styles.pressed]}
             >
               <Text style={styles.acceptButtonText}>{copy.accept}</Text>
             </Pressable>
           </View>
         ) : (
-          <Link href="/driver-preview" asChild>
-            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}>
-              <Text style={styles.homeButtonText}>{copy.backHome}</Text>
-            </Pressable>
-          </Link>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace('/driver-preview')}
+            style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.homeButtonText}>{copy.backHome}</Text>
+            <Text style={styles.homeButtonArrow}>→</Text>
+          </Pressable>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -273,8 +316,11 @@ const styles = StyleSheet.create({
   },
   rejectButtonText: { color: COLORS.ink, fontSize: 13, fontWeight: '700' },
   acceptButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 15, flex: 1, height: 54, justifyContent: 'center' },
+  disabledButton: { opacity: 0.55 },
   acceptButtonText: { color: COLORS.white, fontSize: 13, fontWeight: '800' },
-  homeButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 15, height: 54, justifyContent: 'center', marginTop: 18 },
-  homeButtonText: { color: COLORS.white, fontSize: 13, fontWeight: '800' },
+  homeButton: { alignItems: 'center', backgroundColor: '#235C1D', borderColor: '#1A4815', borderRadius: 16, borderWidth: 1, flexDirection: 'row', height: 54, justifyContent: 'center', marginTop: 18, width: '100%' },
+  homeButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '900' },
+  homeButtonArrow: { color: '#B7D52B', fontSize: 19, fontWeight: '900', marginLeft: 10 },
+  emptyState: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   pressed: { opacity: 0.76 },
 });

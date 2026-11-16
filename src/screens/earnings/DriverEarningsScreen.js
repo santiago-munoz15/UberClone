@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'expo-router';
+import { useState } from 'react';
+import { Link, router } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import driverEarningsTranslations from '../../config/driverEarningsTranslations';
-import { useDriverTrip } from '../../context/DriverTripContext';
-import { aggregateDriverEarnings } from '../../utils/aggregateDriverEarnings';
+import useEarnings from '../../hooks/useEarnings';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
 
 const COLORS = {
@@ -24,14 +23,10 @@ const PAYMENT_STATUS_KEYS = {
 };
 
 export default function DriverEarningsScreen() {
-  const { completedTrips } = useDriverTrip();
   const [period, setPeriod] = useState('today');
+  const { completedTrips, summary } = useEarnings(period);
   const language = completedTrips[0]?.language === 'en' ? 'en' : 'es';
   const copy = driverEarningsTranslations[language];
-  const summary = useMemo(
-    () => aggregateDriverEarnings(completedTrips, period),
-    [completedTrips, period],
-  );
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -114,11 +109,14 @@ export default function DriverEarningsScreen() {
           ))}
         </View>
 
-        <Link href="/driver-preview" asChild>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-            <Text style={styles.backButtonText}>{copy.backHome}</Text>
-          </Pressable>
-        </Link>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.replace('/driver-preview')}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.backButtonText}>{copy.backHome}</Text>
+          <Text style={styles.backButtonArrow}>→</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -220,7 +218,8 @@ const styles = StyleSheet.create({
   paymentBadge: { backgroundColor: '#EFF3DE', borderRadius: 8, color: '#596526', fontSize: 8, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 5 },
   tripRoute: { color: COLORS.ink, fontSize: 12, fontWeight: '800', lineHeight: 18, marginTop: 10 },
   tripMeta: { color: COLORS.muted, fontSize: 9, marginTop: 4 },
-  backButton: { alignItems: 'center', borderColor: '#D8DBD3', borderRadius: 14, borderWidth: 1, justifyContent: 'center', marginTop: 10, minHeight: 50 },
-  backButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '700' },
+  backButton: { alignItems: 'center', backgroundColor: '#235C1D', borderColor: '#1A4815', borderRadius: 16, borderWidth: 1, flexDirection: 'row', justifyContent: 'center', marginTop: 18, minHeight: 54, paddingHorizontal: 18, width: '100%' },
+  backButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '900' },
+  backButtonArrow: { color: COLORS.accent, fontSize: 19, fontWeight: '900', marginLeft: 10 },
   pressed: { opacity: 0.75 },
 });

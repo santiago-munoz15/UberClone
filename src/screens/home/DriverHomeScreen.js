@@ -1,10 +1,11 @@
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DriverMapPreview from '../../components/home/DriverMapPreview';
 import driverHomeTranslations from '../../config/driverHomeTranslations';
 import useDriverLocation from '../../hooks/useDriverLocation';
 import { useDriverAvailability } from '../../context/DriverAvailabilityContext';
+import { useDriverTrip } from '../../context/DriverTripContext';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -14,10 +15,36 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
+function ActionIcon({ type }) {
+  return (
+    <View style={styles.actionIcon}>
+      {type === 'earnings' ? (
+        <View style={styles.chartIcon}>
+          <View style={[styles.chartBar, styles.chartBarShort]} />
+          <View style={[styles.chartBar, styles.chartBarTall]} />
+          <View style={[styles.chartBar, styles.chartBarMedium]} />
+        </View>
+      ) : type === 'history' ? (
+        <View style={styles.clockIcon}>
+          <View style={styles.clockHandHour} />
+          <View style={styles.clockHandMinute} />
+        </View>
+      ) : (
+        <View style={styles.profileIcon}>
+          <View style={styles.profileHead} />
+          <View style={styles.profileBody} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function DriverHomeScreen() {
   const copy = driverHomeTranslations.es;
-  const location = useDriverLocation();
   const { isAvailable, toggleAvailability } = useDriverAvailability();
+  const location = useDriverLocation(isAvailable);
+  const { activeTrip, isHydrated } = useDriverTrip();
+  const hasUnfinishedTrip = activeTrip && activeTrip.status !== 'completed';
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -31,7 +58,14 @@ export default function DriverHomeScreen() {
               <Text style={styles.brandSubtitle}>CONDUCTOR</Text>
             </View>
           </View>
-          <Text style={styles.developmentBadge}>{copy.developmentBadge}</Text>
+          <Pressable
+            accessibilityLabel="Abrir configuración"
+            accessibilityRole="button"
+            onPress={() => router.push('/settings')}
+            style={styles.settingsButton}
+          >
+            <Text style={styles.settingsIcon}>⚙</Text>
+          </Pressable>
         </View>
 
         <Text style={styles.heading}>{copy.title}</Text>
@@ -73,63 +107,68 @@ export default function DriverHomeScreen() {
           <Text style={styles.gpsNoteText}>{copy.noGps}</Text>
         </View>
 
-        {__DEV__ ? (
-          <Link href="/incoming-request" asChild>
-            <Pressable
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.requestPreviewButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.requestPreviewButtonText}>{copy.previewRequest}</Text>
+        {!isHydrated ? (
+          <View accessibilityLiveRegion="polite" style={styles.tripRestoreNotice}>
+            <Text style={styles.tripRestoreText}>Recuperando el estado del viaje…</Text>
+          </View>
+        ) : hasUnfinishedTrip ? (
+          <Link href="/active-trip" asChild>
+            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.requestPreviewButton, pressed && styles.pressed]}>
+              <Text style={styles.requestPreviewButtonText}>{copy.resumeTrip}</Text>
               <Text style={styles.requestPreviewArrow}>→</Text>
             </Pressable>
           </Link>
+        ) : __DEV__ ? (
+          <Pressable
+            accessibilityLabel={copy.previewRequest}
+            accessibilityRole="button"
+            onPress={() => router.push('/incoming-request')}
+            style={({ pressed }) => [styles.simulationButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.simulationButtonLightning}>ϟ</Text>
+            <Text style={styles.simulationButtonText}>{copy.previewRequest}</Text>
+          </Pressable>
         ) : null}
 
-        <Link href="/earnings" asChild>
-          <Pressable
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.earningsButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.earningsButtonText}>{copy.previewEarnings}</Text>
-            <Text style={styles.requestPreviewArrow}>→</Text>
-          </Pressable>
-        </Link>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/earnings')}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+        >
+          <ActionIcon type="earnings" />
+          <View style={styles.actionCopy}>
+            <Text style={styles.actionTitle}>{copy.previewEarnings}</Text>
+            <Text style={styles.actionSubtitle}>Revisa tus ingresos acumulados</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </Pressable>
 
-        <Link href="/trip-history" asChild>
-          <Pressable
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.historyButtonText}>{copy.previewTripHistory}</Text>
-            <Text style={styles.requestPreviewArrow}>→</Text>
-          </Pressable>
-        </Link>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/trip-history')}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+        >
+          <ActionIcon type="history" />
+          <View style={styles.actionCopy}>
+            <Text style={styles.actionTitle}>{copy.previewTripHistory}</Text>
+            <Text style={styles.actionSubtitle}>Revisa tus viajes realizados</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </Pressable>
 
-        <Link href="/profile" asChild>
-          <Pressable
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.profileButtonText}>{copy.openProfile}</Text>
-            <Text style={styles.requestPreviewArrow}>→</Text>
-          </Pressable>
-        </Link>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/profile')}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+        >
+          <ActionIcon type="profile" />
+          <View style={styles.actionCopy}>
+            <Text style={styles.actionTitle}>{copy.openProfile}</Text>
+            <Text style={styles.actionSubtitle}>Gestiona tu información personal</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </Pressable>
 
-        <Link href="/settings" asChild>
-          <Pressable
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.profileButtonText}>{copy.openSettings}</Text>
-            <Text style={styles.requestPreviewArrow}>→</Text>
-          </Pressable>
-        </Link>
-
-        <Link href="/" asChild>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
-            <Text style={styles.backLinkText}>{copy.backToRegistration}</Text>
-          </Pressable>
-        </Link>
       </ScrollView>
     </SafeAreaView>
   );
@@ -139,6 +178,8 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.background, flex: 1 },
   content: { paddingBottom: 32, paddingHorizontal: 20, paddingTop: 14 },
   topRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  settingsButton: { alignItems: 'center', backgroundColor: COLORS.white, borderColor: '#DDE0D7', borderRadius: 14, borderWidth: 1, height: 48, justifyContent: 'center', width: 48 },
+  settingsIcon: { color: COLORS.ink, fontSize: 25, fontWeight: '700' },
   brandRow: { alignItems: 'center', flexDirection: 'row', gap: 9 },
   brandMark: {
     alignItems: 'center',
@@ -159,7 +200,7 @@ const styles = StyleSheet.create({
     maxWidth: 130,
     textAlign: 'right',
   },
-  heading: { color: COLORS.ink, fontSize: 29, fontWeight: '900', letterSpacing: -0.7, marginTop: 28 },
+  heading: { color: COLORS.ink, fontSize: 29, fontWeight: '900', letterSpacing: -0.7, marginTop: 21 },
   subtitle: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 6, maxWidth: 330 },
   simulationBanner: {
     alignItems: 'center',
@@ -183,6 +224,8 @@ const styles = StyleSheet.create({
     width: 17,
   },
   simulationText: { color: '#596526', flex: 1, fontSize: 10, fontWeight: '700' },
+  tripRestoreNotice: { backgroundColor: '#FFFFFF', borderRadius: 12, marginTop: 16, padding: 14 },
+  tripRestoreText: { color: COLORS.muted, fontSize: 12, textAlign: 'center' },
   statusCard: {
     alignItems: 'center',
     backgroundColor: COLORS.white,
@@ -226,42 +269,53 @@ const styles = StyleSheet.create({
   },
   requestPreviewButtonText: { color: COLORS.white, fontSize: 12, fontWeight: '800' },
   requestPreviewArrow: { color: COLORS.accent, fontSize: 17, fontWeight: '800', marginLeft: 9 },
-  earningsButton: {
+  simulationButton: {
+    alignItems: 'center',
+    backgroundColor: '#235C1D',
+    borderColor: '#1A4815',
+    borderWidth: 1,
+    borderRadius: 18,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 18,
+    minHeight: 56,
+    paddingHorizontal: 20,
+    width: '100%',
+    shadowColor: '#163D13',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  simulationButtonLightning: { color: COLORS.accent, fontSize: 33, fontWeight: '900', lineHeight: 36, marginRight: 14 },
+  simulationButtonText: { color: COLORS.white, flexShrink: 1, fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  actionButton: {
     alignItems: 'center',
     backgroundColor: COLORS.white,
     borderColor: '#D8DBD3',
-    borderRadius: 15,
+    borderRadius: 17,
     borderWidth: 1,
     flexDirection: 'row',
-    height: 50,
-    justifyContent: 'center',
+    minHeight: 68,
     marginTop: 11,
+    paddingHorizontal: 12,
   },
-  earningsButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
-  historyButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderColor: '#D8DBD3',
-    borderRadius: 15,
-    borderWidth: 1,
-    flexDirection: 'row',
-    height: 50,
-    justifyContent: 'center',
-    marginTop: 9,
-  },
-  historyButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
-  profileButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderColor: '#D8DBD3',
-    borderRadius: 15,
-    borderWidth: 1,
-    flexDirection: 'row',
-    height: 50,
-    justifyContent: 'center',
-    marginTop: 9,
-  },
-  profileButtonText: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
+  actionIcon: { alignItems: 'center', backgroundColor: '#EFF8C9', borderRadius: 12, height: 42, justifyContent: 'center', width: 42 },
+  chartIcon: { alignItems: 'flex-end', borderBottomColor: '#315B20', borderBottomWidth: 2, flexDirection: 'row', height: 23, justifyContent: 'center', width: 23 },
+  chartBar: { backgroundColor: '#315B20', marginHorizontal: 2, width: 3 },
+  chartBarShort: { height: 9 },
+  chartBarTall: { height: 19 },
+  chartBarMedium: { height: 14 },
+  clockIcon: { borderColor: '#315B20', borderRadius: 10, borderWidth: 2, height: 20, position: 'relative', width: 20 },
+  clockHandHour: { backgroundColor: '#315B20', height: 6, left: 8, position: 'absolute', top: 4, width: 2 },
+  clockHandMinute: { backgroundColor: '#315B20', height: 2, left: 9, position: 'absolute', top: 9, transform: [{ rotate: '25deg' }], width: 6 },
+  profileIcon: { alignItems: 'center', height: 24, justifyContent: 'flex-end', width: 23 },
+  profileHead: { borderColor: '#315B20', borderRadius: 6, borderWidth: 2, height: 10, position: 'absolute', top: 0, width: 10 },
+  profileBody: { borderColor: '#315B20', borderBottomWidth: 2, borderLeftWidth: 2, borderRadius: 10, borderRightWidth: 2, height: 13, width: 20 },
+  actionCopy: { flex: 1, marginLeft: 12 },
+  actionTitle: { color: COLORS.ink, fontSize: 15, fontWeight: '900' },
+  actionSubtitle: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
+  actionArrow: { color: COLORS.ink, fontSize: 30, fontWeight: '300', marginLeft: 8 },
   backLink: { alignItems: 'center', alignSelf: 'center', marginTop: 15, padding: 10 },
   backLinkText: { color: COLORS.ink, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   pressed: { opacity: 0.74 },

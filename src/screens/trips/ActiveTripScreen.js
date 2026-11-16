@@ -4,9 +4,8 @@ import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import driverTripTranslations from '../../config/driverTripTranslations';
 import tripPaymentTranslations from '../../config/tripPaymentTranslations';
-import { calculateTripEarnings } from '../../config/pricing';
+import { calculateFare } from '../../config/pricing';
 import { useDriverTrip } from '../../context/DriverTripContext';
-import { MOCK_TRIP_PAYMENT_SCENARIOS } from '../../data/mockTripPaymentScenarios';
 import TripNavigationMap from '../../components/trips/TripNavigationMap';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
 import useTripRoute from '../../hooks/useTripRoute';
@@ -23,8 +22,10 @@ const COLORS = {
 const STATUS_COPY = {
   accepted: ['acceptedTitle', 'acceptedMessage'],
   arriving: ['arrivingTitle', 'arrivingMessage'],
+  onboard: ['onboardTitle', 'onboardMessage'],
   in_progress: ['inProgressTitle', 'inProgressMessage'],
   completed: ['completedTitle', 'completedMessage'],
+  paid: ['completedTitle', 'completedMessage'],
 };
 
 export default function ActiveTripScreen() {
@@ -34,7 +35,8 @@ export default function ActiveTripScreen() {
     activeTrip,
     tripLocation,
     transitionActiveTrip,
-    selectPaymentScenario,
+    simulatePickupArrival,
+    simulateDestinationArrival,
     completeActiveTrip,
   } = useDriverTrip();
   const language = activeTrip?.language === 'en' ? 'en' : 'es';
@@ -42,7 +44,7 @@ export default function ActiveTripScreen() {
   const paymentCopy = tripPaymentTranslations[language];
   const [validationTime, setValidationTime] = useState(0);
   useEffect(() => {
-    if (activeTrip?.status !== 'arriving') return undefined;
+    if (activeTrip?.status !== 'arriving' && activeTrip?.status !== 'in_progress') return undefined;
     const initialUpdate = setTimeout(() => setValidationTime(Date.now()), 0);
     const timer = setInterval(() => setValidationTime(Date.now()), 1000);
     return () => {
@@ -50,13 +52,12 @@ export default function ActiveTripScreen() {
       clearInterval(timer);
     };
   }, [activeTrip?.status]);
-  const fareCop = activeTrip?.status === 'completed'
-    ? activeTrip.finalFareCop
-    : activeTrip?.estimatedFareCop;
-  const earnings = useMemo(
-    () => calculateTripEarnings(fareCop ?? 0),
-    [fareCop],
-  );
+  const earnings = useMemo(() => calculateFare({
+    category: activeTrip?.category,
+    distanceKm: activeTrip?.distanceKm,
+    durationMin: activeTrip?.estimatedDurationMinutes,
+    tip: activeTrip?.tipCop,
+  }), [activeTrip?.category, activeTrip?.distanceKm, activeTrip?.estimatedDurationMinutes, activeTrip?.tipCop]);
   const tripRoute = useTripRoute({
     status: activeTrip?.status,
     location: tripLocation.location,
@@ -83,15 +84,24 @@ export default function ActiveTripScreen() {
   }
 
   const [titleKey, messageKey] = STATUS_COPY[activeTrip.status] ?? STATUS_COPY.accepted;
-  const isCompleted = activeTrip.status === 'completed';
+  const isCompleted = activeTrip.status === 'completed' || activeTrip.status === 'paid';
   const isInProgress = activeTrip.status === 'in_progress';
   const isArriving = activeTrip.status === 'arriving';
+  const isOnboard = activeTrip.status === 'onboard';
   const pickupValidation = validatePickupProximity(
     tripLocation.status === 'ready' ? tripLocation.location : null,
     activeTrip.pickupLocation,
     validationTime,
   );
   const boardingDisabled = isArriving && !pickupValidation.allowed;
+  const destinationValidation = activeTrip.demoDestinationArrival && activeTrip.isSimulated && __DEV__
+    ? { allowed: true, reason: 'ready', distanceMeters: 0 }
+    : validatePickupProximity(
+      tripLocation.status === 'ready' ? tripLocation.location : null,
+      activeTrip.destinationLocation,
+      validationTime,
+    );
+  const finishDisabled = isInProgress && !destinationValidation.allowed;
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -129,10 +139,10 @@ export default function ActiveTripScreen() {
         />
 
         <View style={styles.routeCard}>
-          <RoutePoint label={copy.origin} value={activeTrip.origin} isOrigin={!isInProgress} />
+          <RoutePoint label={copy.origin} value={activeTrip.origin} isOrigin={!isInProgress && !isOnboard} />
           <View style={styles.routeConnector} />
-          <RoutePoint label={copy.destination} value={activeTrip.destination} isDestination={isInProgress} />
-          {isInProgress && route && (
+          <RoutePoint label={copy.destination} value={activeTrip.destination} isDestination={isInProgress || isOnboard} />
+          {(isInProgress || isOnboard) && route && (
             <View style={styles.tripMeta}>
               <Text style={styles.metaText}>{`${route.distanceKm.toFixed(1)} ${copy.km}`}</Text>
               <Text style={styles.metaDot}>·</Text>
@@ -141,62 +151,34 @@ export default function ActiveTripScreen() {
           )}
         </View>
 
-        {!isCompleted && route && (
+        {!isCompleted && (isInProgress || isOnboard) && route && (
           <View style={styles.metricsRow}>
             <Metric label={copy.distance} value={`${route.distanceKm.toFixed(1)} ${copy.km}`} />
             <Metric label={copy.duration} value={`${Math.ceil(route.durationMinutes)} ${copy.minutes}`} />
           </View>
         )}
 
-        {isInProgress && (
-          <View style={styles.paymentScenarioCard}>
-            <Text style={styles.scenarioTitle}>{paymentCopy.scenarioTitle}</Text>
-            <Text style={styles.scenarioHint}>{paymentCopy.scenarioHint}</Text>
-            <View style={styles.scenarioList}>
-              {MOCK_TRIP_PAYMENT_SCENARIOS.map((scenario) => {
-                const isSelected = activeTrip.paymentScenarioId === scenario.id;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    key={scenario.id}
-                    onPress={() => selectPaymentScenario(scenario.id)}
-                    style={[styles.scenarioOption, isSelected && styles.scenarioOptionSelected]}
-                  >
-                    <Text style={[styles.scenarioOptionTitle, isSelected && styles.scenarioOptionTitleSelected]}>
-                      {paymentCopy[scenario.titleKey]}
-                    </Text>
-                    <Text style={[styles.scenarioOptionStatus, isSelected && styles.scenarioOptionTitleSelected]}>
-                      {paymentCopy[scenario.statusKey]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
         <View style={styles.fareCard}>
           <Text style={styles.fareHeading}>{copy.fare}</Text>
-          <Text style={styles.grossFare}>{formatCopCurrency(earnings.grossFareCop)}</Text>
+          <Text style={styles.grossFare}>{formatCopCurrency(earnings.fare)}</Text>
           <View style={styles.divider} />
-          <DetailRow label={copy.commission} value={`−${formatCopCurrency(earnings.platformCommissionCop)}`} />
+          <DetailRow label={copy.commission} value={`−${formatCopCurrency(earnings.commission)}`} />
           <View style={styles.netRow}>
             <Text style={styles.netLabel}>{copy.net}</Text>
-            <Text style={styles.netValue}>{formatCopCurrency(earnings.driverNetCop)}</Text>
+            <Text style={styles.netValue}>{formatCopCurrency(earnings.driverEarnings)}</Text>
           </View>
         </View>
 
         {!isCompleted ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: boardingDisabled }}
-            disabled={boardingDisabled}
-            onPress={() => {
+            accessibilityState={{ disabled: boardingDisabled || finishDisabled }}
+            disabled={boardingDisabled || finishDisabled}
+            onPress={async () => {
               if (isInProgress) {
                 if (completionLock.current) return;
                 completionLock.current = true;
-                if (completeActiveTrip()) {
+                if (await completeActiveTrip()) {
                   router.push('/trip-payment-summary');
                 } else {
                   completionLock.current = false;
@@ -204,12 +186,15 @@ export default function ActiveTripScreen() {
                 return;
               }
               if (isArriving && !pickupValidation.allowed) return;
-              transitionActiveTrip(activeTrip.status === 'accepted' ? 'arriving' : 'in_progress');
+              const nextStatus = activeTrip.status === 'accepted'
+                ? 'arriving'
+                : isArriving ? 'onboard' : isOnboard ? 'in_progress' : null;
+              if (nextStatus) transitionActiveTrip(nextStatus);
             }}
-            style={({ pressed }) => [styles.primaryButton, boardingDisabled && styles.disabledButton, pressed && !boardingDisabled && styles.pressed]}
+            style={({ pressed }) => [styles.primaryButton, (boardingDisabled || finishDisabled) && styles.disabledButton, pressed && !boardingDisabled && !finishDisabled && styles.pressed]}
           >
             <Text style={styles.primaryButtonText}>
-              {copy[isInProgress ? 'finishTrip' : activeTrip.status === 'accepted' ? 'goToPassenger' : 'passengerOnboard']}
+              {copy[isInProgress ? 'finishTrip' : isOnboard ? 'startDestinationTrip' : activeTrip.status === 'accepted' ? 'goToPassenger' : 'passengerOnboard']}
             </Text>
           </Pressable>
         ) : (
@@ -228,11 +213,34 @@ export default function ActiveTripScreen() {
             </Link>
           </View>
         )}
+        {isArriving && !pickupValidation.allowed && __DEV__ ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={simulatePickupArrival}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryButtonText}>{copy.simulatePickupArrival}</Text>
+          </Pressable>
+        ) : null}
         {isArriving && (
           <Text accessibilityLiveRegion="polite" style={[styles.pickupValidation, pickupValidation.allowed && styles.pickupValidationReady]}>
             {getPickupValidationMessage(copy, pickupValidation)}
           </Text>
         )}
+        {isInProgress && !destinationValidation.allowed ? (
+          <Text accessibilityLiveRegion="polite" style={styles.pickupValidation}>
+            {getDestinationValidationMessage(copy, destinationValidation)}
+          </Text>
+        ) : null}
+        {isInProgress && !destinationValidation.allowed && __DEV__ && activeTrip.isSimulated ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={simulateDestinationArrival}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryButtonText}>{copy.simulateDestinationArrival}</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -250,6 +258,20 @@ function getPickupValidationMessage(copy, validation) {
   }
   if (validation.reason === 'location_stale') return copy.pickupLocationStale;
   return copy.pickupLocationUnavailable;
+}
+
+function getDestinationValidationMessage(copy, validation) {
+  const key = validation.reason === 'ready'
+    ? 'destinationReady'
+    : validation.reason === 'accuracy_insufficient'
+      ? 'destinationAccuracyInsufficient'
+      : validation.reason === 'location_stale'
+        ? 'destinationLocationStale'
+        : validation.reason === 'location_unavailable'
+          ? 'destinationLocationUnavailable'
+          : 'destinationRemaining';
+  const distance = validation.distanceMeters === null ? '—' : `${Math.ceil(validation.distanceMeters)}`;
+  return copy[key].replace('{distance}', distance);
 }
 
 function RoutePoint({ label, value, isOrigin = false, isDestination = false }) {
@@ -311,9 +333,6 @@ const styles = StyleSheet.create({
   metricCard: { backgroundColor: COLORS.white, borderRadius: 16, flex: 1, padding: 14 },
   metricLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '600' },
   metricValue: { color: COLORS.ink, fontSize: 16, fontWeight: '800', marginTop: 6 },
-  paymentScenarioCard: { backgroundColor: COLORS.white, borderRadius: 16, marginTop: 12, padding: 14 },
-  scenarioTitle: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
-  scenarioHint: { color: COLORS.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
   scenarioList: { gap: 8, marginTop: 10 },
   scenarioOption: { borderColor: '#E1E4DC', borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 9 },
   scenarioOptionSelected: { backgroundColor: '#EFF3DE', borderColor: '#9DB52C' },

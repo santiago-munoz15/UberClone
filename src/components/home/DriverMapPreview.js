@@ -12,11 +12,14 @@ export default function DriverMapPreview({ copy, location }) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
+        <Text style={styles.locationIcon}>⌖</Text>
         <View>
           <Text style={styles.title}>{copy.mapTitle}</Text>
           <Text style={styles.location}>{location.label}</Text>
         </View>
-        <Text style={styles.mapLabel}>{copy.mapLabel}</Text>
+        <View style={styles.mapLabelPill}>
+          <Text style={styles.mapLabel}>{copy.mapLabel}</Text>
+        </View>
       </View>
 
       <View
@@ -69,10 +72,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     paddingVertical: 16,
   },
-  title: { color: COLORS.ink, fontSize: 15, fontWeight: '800' },
+  locationIcon: { color: COLORS.ink, fontSize: 28, marginRight: 10 },
+  title: { color: COLORS.ink, flex: 1, fontSize: 15, fontWeight: '800' },
   location: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
-  mapLabel: { color: COLORS.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.1 },
-  map: { backgroundColor: COLORS.surface, height: 238, overflow: 'hidden', position: 'relative' },
+  mapLabelPill: { backgroundColor: '#EFF8C9', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
+  mapLabel: { color: '#596526', fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
+  map: { backgroundColor: COLORS.surface, height: 198, overflow: 'hidden', position: 'relative' },
   park: { backgroundColor: '#D7E4C6', borderRadius: 14, position: 'absolute' },
   parkOne: { height: 90, left: -20, top: 8, transform: [{ rotate: '-12deg' }], width: 135 },
   parkTwo: { bottom: -16, height: 104, right: -12, transform: [{ rotate: '18deg' }], width: 150 },

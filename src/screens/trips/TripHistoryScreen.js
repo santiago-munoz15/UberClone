@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import tripHistoryTranslations from '../../config/tripHistoryTranslations';
 import driverEarningsTranslations from '../../config/driverEarningsTranslations';
@@ -52,12 +52,13 @@ function formatLocalDate(value, language) {
 }
 
 export default function TripHistoryScreen() {
-  const { completedTrips } = useDriverTrip();
+  const { completedTrips, completedTripsError, completedTripsLoading } = useDriverTrip();
   const [period, setPeriod] = useState('all');
   const [paymentMethod, setPaymentMethod] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [iosPickerField, setIosPickerField] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(20);
   const language = completedTrips[0]?.language === 'en' ? 'en' : 'es';
   const copy = tripHistoryTranslations[language];
   const earningsCopy = driverEarningsTranslations[language];
@@ -71,6 +72,7 @@ export default function TripHistoryScreen() {
   const setDate = (field, date) => {
     if (!date) return;
     const dateValue = toLocalDateString(date);
+    setVisibleCount(20);
     if (field === 'dateFrom') setDateFrom(dateValue);
     if (field === 'dateTo') setDateTo(dateValue);
   };
@@ -90,11 +92,57 @@ export default function TripHistoryScreen() {
 
   const pickerValue = parseLocalDate(iosPickerField === 'dateFrom' ? dateFrom : dateTo);
   const invalidRange = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  const visibleTrips = trips.slice(0, visibleCount);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <FlatList
+        contentContainerStyle={styles.content}
+        data={completedTripsLoading || completedTripsError ? [] : visibleTrips}
+        keyExtractor={(trip) => trip.id}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={() => (
+          completedTripsLoading ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>{copy.loadingTitle}</Text>
+              <Text style={styles.emptyMessage}>{copy.loadingMessage}</Text>
+            </View>
+          ) : completedTripsError ? (
+            <View accessibilityRole="alert" style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>{copy.errorTitle}</Text>
+              <Text style={styles.emptyMessage}>{copy.errorMessage}</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>{copy.noTripsTitle}</Text>
+              <Text style={styles.emptyMessage}>{copy.noTripsMessage}</Text>
+            </View>
+          )
+        )}
+        ListFooterComponent={(
+          <>
+            {visibleTrips.length < trips.length ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setVisibleCount((current) => Math.min(current + 20, trips.length))}
+                style={({ pressed }) => [styles.loadMoreButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.loadMoreText}>{copy.loadMore}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace('/driver-preview')}
+              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.backButtonText}>{copy.backHome}</Text>
+              <Text style={styles.backButtonArrow}>→</Text>
+            </Pressable>
+          </>
+        )}
+        ListHeaderComponent={(
+          <>
         <View style={styles.header}>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
@@ -114,6 +162,7 @@ export default function TripHistoryScreen() {
                 selected={period === item}
                 onPress={() => {
                   setPeriod(item);
+                  setVisibleCount(20);
                   setIosPickerField(null);
                 }}
               />
@@ -150,7 +199,10 @@ export default function TripHistoryScreen() {
                 key={value}
                 label={copy[labelKey]}
                 selected={paymentMethod === value}
-                onPress={() => setPaymentMethod(value)}
+                onPress={() => {
+                  setPaymentMethod(value);
+                  setVisibleCount(20);
+                }}
               />
             ))}
           </View>
@@ -160,16 +212,19 @@ export default function TripHistoryScreen() {
           <Text style={styles.sectionTitle}>{copy.trip}</Text>
           <Text style={styles.resultCount}>{trips.length}</Text>
         </View>
-
-        {trips.length === 0 || invalidRange ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>{copy.noTripsTitle}</Text>
-            <Text style={styles.emptyMessage}>{copy.noTripsMessage}</Text>
-          </View>
-        ) : trips.map((trip) => (
-          <HistoryTripCard key={trip.id} trip={trip} copy={copy} earningsCopy={earningsCopy} language={language} />
-        ))}
-      </ScrollView>
+          </>
+        )}
+        onEndReached={() => {
+          if (visibleTrips.length < trips.length) {
+            setVisibleCount((current) => Math.min(current + 20, trips.length));
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        renderItem={({ item }) => (
+          <HistoryTripCard trip={item} copy={copy} earningsCopy={earningsCopy} language={language} />
+        )}
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -240,6 +295,8 @@ const styles = StyleSheet.create({
   subtitle: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
   badge: { backgroundColor: '#EFF3DE', borderRadius: 10, marginTop: 4, maxWidth: 112, paddingHorizontal: 9, paddingVertical: 7 },
   badgeText: { color: '#596526', fontSize: 8, fontWeight: '800', textAlign: 'center' },
+  loadMoreButton: { alignItems: 'center', backgroundColor: '#EFF3DE', borderRadius: 12, marginTop: 4, paddingVertical: 11 },
+  loadMoreText: { color: '#506518', fontSize: 11, fontWeight: '800' },
   filterCard: { backgroundColor: COLORS.white, borderRadius: 17, marginTop: 18, padding: 14 },
   filterTitle: { color: COLORS.ink, fontSize: 11, fontWeight: '800' },
   chipGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 9 },
@@ -263,6 +320,9 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.ink, fontSize: 15, fontWeight: '900' },
   resultCount: { color: COLORS.muted, fontSize: 11, fontWeight: '700' },
   emptyCard: { alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 17, paddingHorizontal: 20, paddingVertical: 25 },
+  backButton: { alignItems: 'center', backgroundColor: '#235C1D', borderColor: '#1A4815', borderRadius: 16, borderWidth: 1, flexDirection: 'row', justifyContent: 'center', marginTop: 18, minHeight: 54, paddingHorizontal: 18, width: '100%' },
+  backButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '900' },
+  backButtonArrow: { color: COLORS.accent, fontSize: 19, fontWeight: '900', marginLeft: 10 },
   emptyTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   emptyMessage: { color: COLORS.muted, fontSize: 11, lineHeight: 17, marginTop: 6, textAlign: 'center' },
   tripCard: { backgroundColor: COLORS.white, borderRadius: 16, marginBottom: 10, paddingHorizontal: 14, paddingVertical: 12 },

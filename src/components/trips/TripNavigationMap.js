@@ -24,6 +24,9 @@ const COPY = {
     retryRoute: 'Reintentar ruta',
     attribution: '© OpenStreetMap contributors · Ruta: OSRM',
     accuracy: 'Ubicación GPS',
+    compassUnavailable: 'Brújula no disponible',
+    phoneHeading: 'Teléfono',
+    gpsCourse: 'Rumbo GPS',
   },
   en: {
     title: 'Trip navigation',
@@ -46,6 +49,9 @@ const COPY = {
     retryRoute: 'Retry route',
     attribution: '© OpenStreetMap contributors · Route: OSRM',
     accuracy: 'GPS location',
+    compassUnavailable: 'Compass unavailable',
+    phoneHeading: 'Phone',
+    gpsCourse: 'GPS course',
   },
 };
 

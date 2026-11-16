@@ -1,5 +1,7 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import tripHistoryTranslations from '../../config/tripHistoryTranslations';
 import { useDriverTrip } from '../../context/DriverTripContext';
@@ -26,6 +28,17 @@ export default function TripHistoryDetailScreen() {
   const trip = completedTrips.find((item) => item.id === normalizedTripId);
   const language = trip?.language === 'en' ? 'en' : 'es';
   const copy = tripHistoryTranslations[language];
+  const mapRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
+  const routeData = useMemo(() => getRouteData(trip), [trip]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || routeData.mapCoordinates.length < 2) return;
+    mapRef.current.fitToCoordinates(routeData.mapCoordinates, {
+      edgePadding: { top: 42, right: 42, bottom: 42, left: 42 },
+      animated: false,
+    });
+  }, [mapReady, routeData.mapCoordinates]);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -44,9 +57,31 @@ export default function TripHistoryDetailScreen() {
           <Text style={styles.completedAt}>{copy.completedAt}: {formatCompletedAt(trip.completedAt, language, copy.notAvailable)}</Text>
 
           <View style={styles.routeCard}>
-            <RouteRow label={copy.origin} value={trip.origin || copy.notAvailable} markerStyle={styles.originMarker} />
+            <Text style={styles.cardTitle}>{copy.routeTitle}</Text>
+            {routeData.mapCoordinates.length >= 2 ? (
+              <View style={styles.mapFrame}>
+                <MapView
+                  ref={mapRef}
+                  initialRegion={getInitialRegion(routeData.mapCoordinates)}
+                  loadingEnabled
+                  onMapReady={() => setMapReady(true)}
+                  style={styles.map}
+                  toolbarEnabled={false}
+                >
+                  <Marker coordinate={routeData.origin} title={copy.origin} pinColor="#7C9820" />
+                  <Marker coordinate={routeData.destination} title={copy.destination} pinColor={COLORS.ink} />
+                  {routeData.routeCoordinates.length >= 2 ? (
+                    <Polyline coordinates={routeData.routeCoordinates} strokeColor="#536A12" strokeWidth={5} />
+                  ) : null}
+                </MapView>
+              </View>
+            ) : null}
+            {routeData.routeCoordinates.length < 2 ? (
+              <Text style={styles.routeUnavailable}>{copy.routeUnavailable}</Text>
+            ) : null}
+            <RouteRow label={copy.origin} value={formatPlace(trip.pickupLocation, formatPlace(trip.origin, copy.notAvailable))} markerStyle={styles.originMarker} />
             <View style={styles.routeConnector} />
-            <RouteRow label={copy.destination} value={trip.destination || copy.notAvailable} markerStyle={styles.destinationMarker} />
+            <RouteRow label={copy.destination} value={formatPlace(trip.destinationLocation, formatPlace(trip.destination, copy.notAvailable))} markerStyle={styles.destinationMarker} />
           </View>
 
           <View style={styles.card}>
@@ -71,6 +106,11 @@ export default function TripHistoryDetailScreen() {
             <DetailRow label={copy.paymentStatus} value={copy[PAYMENT_STATUS_KEYS[trip.paymentStatus] ?? 'notAvailable']} />
           </View>
 
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{copy.passengerRating}</Text>
+            <Rating rating={trip.rating} copy={copy} />
+          </View>
+
           <HistoryLink copy={copy} />
         </ScrollView>
       )}
@@ -83,6 +123,75 @@ function formatCompletedAt(value, language, fallback) {
   return Number.isNaN(date.getTime())
     ? fallback
     : date.toLocaleString(language === 'en' ? 'en-US' : 'es-CO', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function toCoordinate(value) {
+  if (!value) return null;
+  const latitude = Number(value.latitude ?? value.lat);
+  const longitude = Number(value.longitude ?? value.lng);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  return { latitude, longitude };
+}
+
+function getStoredRouteCoordinates(trip) {
+  const candidates = [
+    trip?.routeCoordinates,
+    trip?.route?.coordinates,
+    trip?.coordinates,
+  ];
+  const storedCoordinates = candidates.find((candidate) => Array.isArray(candidate)) ?? [];
+  return storedCoordinates.map(toCoordinate).filter(Boolean);
+}
+
+function getRouteData(trip) {
+  const routeCoordinates = getStoredRouteCoordinates(trip);
+  const origin = toCoordinate(trip?.pickupLocation)
+    ?? toCoordinate(trip?.originLocation)
+    ?? toCoordinate(trip?.origin)
+    ?? routeCoordinates[0];
+  const destination = toCoordinate(trip?.destinationLocation)
+    ?? toCoordinate(trip?.destination)
+    ?? routeCoordinates[routeCoordinates.length - 1];
+  const mapCoordinates = [...[origin, destination].filter(Boolean), ...routeCoordinates];
+
+  return {
+    origin,
+    destination,
+    mapCoordinates,
+    routeCoordinates: origin && destination && routeCoordinates.length >= 2
+      ? routeCoordinates
+      : [],
+  };
+}
+
+function getInitialRegion(coordinates) {
+  const first = coordinates[0];
+  return {
+    latitude: first.latitude,
+    longitude: first.longitude,
+    latitudeDelta: 0.035,
+    longitudeDelta: 0.035,
+  };
+}
+
+function formatPlace(value, fallback) {
+  if (typeof value === 'string') return value;
+  return value?.address || fallback;
+}
+
+function Rating({ rating, copy }) {
+  const numericRating = Number(rating);
+  if (!Number.isFinite(numericRating) || numericRating < 1 || numericRating > 5) {
+    return <Text style={styles.routeUnavailable}>{copy.noRating}</Text>;
+  }
+  const roundedRating = Math.round(numericRating * 10) / 10;
+  return (
+    <View style={styles.ratingRow}>
+      <Text style={styles.stars}>{'★'.repeat(Math.round(numericRating))}{'☆'.repeat(5 - Math.round(numericRating))}</Text>
+      <Text style={styles.ratingValue}>{roundedRating.toFixed(1)} / 5</Text>
+    </View>
+  );
 }
 
 function RouteRow({ label, value, markerStyle }) {
@@ -123,6 +232,9 @@ const styles = StyleSheet.create({
   title: { color: COLORS.ink, fontSize: 25, fontWeight: '900', letterSpacing: -0.6, marginTop: 6 },
   completedAt: { color: COLORS.muted, fontSize: 10, marginTop: 7 },
   routeCard: { backgroundColor: COLORS.white, borderRadius: 18, marginTop: 16, padding: 16 },
+  mapFrame: { borderRadius: 14, height: 220, marginBottom: 14, marginTop: 10, overflow: 'hidden' },
+  map: { height: '100%', width: '100%' },
+  routeUnavailable: { color: COLORS.muted, fontSize: 11, lineHeight: 17, marginBottom: 12, marginTop: 8 },
   routeRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 11 },
   marker: { height: 11, marginTop: 4, width: 11 },
   originMarker: { backgroundColor: '#7C9820', borderRadius: 6 },
@@ -139,6 +251,9 @@ const styles = StyleSheet.create({
   strongLabel: { color: COLORS.ink, fontWeight: '900' },
   strongValue: { color: '#506518', fontSize: 14, fontWeight: '900' },
   divider: { backgroundColor: '#ECEEE8', height: 1 },
+  ratingRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 10, paddingTop: 8 },
+  stars: { color: '#B38A1D', fontSize: 20, letterSpacing: 2 },
+  ratingValue: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
   notFound: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   message: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
   backButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 14, justifyContent: 'center', marginTop: 18, minHeight: 52, paddingHorizontal: 14 },
