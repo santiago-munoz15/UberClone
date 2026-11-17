@@ -33,6 +33,7 @@ export default function ActiveTripScreen() {
   const completionLock = useRef(false);
   const {
     activeTrip,
+    tripError,
     tripLocation,
     transitionActiveTrip,
     simulatePickupArrival,
@@ -43,6 +44,7 @@ export default function ActiveTripScreen() {
   const copy = driverTripTranslations[language];
   const paymentCopy = tripPaymentTranslations[language];
   const [validationTime, setValidationTime] = useState(0);
+  const [demoArrivalPending, setDemoArrivalPending] = useState(false);
   useEffect(() => {
     if (activeTrip?.status !== 'arriving' && activeTrip?.status !== 'in_progress') return undefined;
     const initialUpdate = setTimeout(() => setValidationTime(Date.now()), 0);
@@ -63,9 +65,12 @@ export default function ActiveTripScreen() {
     location: tripLocation.location,
     pickup: activeTrip?.pickupLocation,
     destination: activeTrip?.destinationLocation,
+    isSimulated: activeTrip?.isSimulated === true,
   });
-  const route = tripLocation.location ? tripRoute.route : null;
-  const routeStatus = tripLocation.location ? tripRoute.status : 'idle';
+  const route = tripRoute.route;
+  const routeStatus = tripRoute.status;
+  const demoRouteCoordinateCount = route?.coordinates?.filter(isValidRouteCoordinate).length ?? 0;
+  const demoRouteReady = tripRoute.status === 'ready' && demoRouteCoordinateCount >= 5;
 
   if (!activeTrip) {
     return (
@@ -94,7 +99,7 @@ export default function ActiveTripScreen() {
     validationTime,
   );
   const boardingDisabled = isArriving && !pickupValidation.allowed;
-  const destinationValidation = activeTrip.demoDestinationArrival && activeTrip.isSimulated && __DEV__
+  const destinationValidation = activeTrip.demoDestinationArrival && activeTrip.isSimulated
     ? { allowed: true, reason: 'ready', distanceMeters: 0 }
     : validatePickupProximity(
       tripLocation.status === 'ready' ? tripLocation.location : null,
@@ -232,13 +237,42 @@ export default function ActiveTripScreen() {
             {getDestinationValidationMessage(copy, destinationValidation)}
           </Text>
         ) : null}
+        {isInProgress && tripError ? (
+          <Text accessibilityRole="alert" style={styles.pickupValidation}>
+            {tripError.message === 'DEMO_ROUTE_UNAVAILABLE'
+              ? copy.demoRouteUnavailable
+              : tripError.message === 'DEMO_ROUTE_TOO_SHORT'
+                ? copy.demoRouteTooShort
+                : copy.routePersistenceError}
+          </Text>
+        ) : null}
+        {isInProgress && activeTrip.isSimulated && !activeTrip.demoDestinationArrival && demoRouteLoadingMessage(tripRoute.status, demoRouteCoordinateCount, copy) ? (
+          <Text accessibilityLiveRegion="polite" style={styles.pickupValidation}>
+            {demoRouteLoadingMessage(tripRoute.status, demoRouteCoordinateCount, copy)}
+          </Text>
+        ) : null}
         {isInProgress && !destinationValidation.allowed && __DEV__ && activeTrip.isSimulated ? (
           <Pressable
             accessibilityRole="button"
-            onPress={simulateDestinationArrival}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+            accessibilityState={{ disabled: demoArrivalPending || !demoRouteReady }}
+            disabled={demoArrivalPending || !demoRouteReady}
+            onPress={async () => {
+              setDemoArrivalPending(true);
+              try {
+                await simulateDestinationArrival(tripRoute.route);
+              } finally {
+                setDemoArrivalPending(false);
+              }
+            }}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              (!demoRouteReady || demoArrivalPending) && styles.disabledButton,
+              pressed && demoRouteReady && !demoArrivalPending && styles.pressed,
+            ]}
           >
-            <Text style={styles.secondaryButtonText}>{copy.simulateDestinationArrival}</Text>
+            <Text style={styles.secondaryButtonText}>
+              {demoArrivalPending ? copy.savingDemoRoute : copy.simulateDestinationArrival}
+            </Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -272,6 +306,20 @@ function getDestinationValidationMessage(copy, validation) {
           : 'destinationRemaining';
   const distance = validation.distanceMeters === null ? '—' : `${Math.ceil(validation.distanceMeters)}`;
   return copy[key].replace('{distance}', distance);
+}
+
+function isValidRouteCoordinate(point) {
+  return Number.isFinite(point?.latitude)
+    && Number.isFinite(point?.longitude)
+    && Math.abs(point.latitude) <= 90
+    && Math.abs(point.longitude) <= 180;
+}
+
+function demoRouteLoadingMessage(status, coordinateCount, copy) {
+  if (status === 'loading' || status === 'idle') return copy.routeCalculating;
+  if (status === 'error') return copy.demoRouteServiceError;
+  if (status === 'ready' && coordinateCount > 0 && coordinateCount < 5) return copy.demoRouteTooShort;
+  return null;
 }
 
 function RoutePoint({ label, value, isOrigin = false, isDestination = false }) {

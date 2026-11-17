@@ -1,10 +1,12 @@
 import {
+  arrayUnion,
   collection,
   deleteField,
   doc,
   getDoc,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -12,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '../config/firebase';
+import { calculateFare } from '../config/pricing';
 
 const tripsCollection = collection(db, 'trips');
 const functions = getFunctions(app, 'us-central1');
@@ -75,12 +78,18 @@ function tripDocumentData(trip, userId, status = trip.status) {
 
 export async function createSimulatedTrip(trip) {
   const user = requireCurrentUser();
-  if (!trip?.id) throw new Error('El viaje simulado no tiene un identificador válido.');
+  const tripId = trip?.tripId || trip?.id;
+  if (!tripId) throw new Error('El viaje simulado no tiene un identificador válido.');
+  const tripRef = doc(db, 'trips', tripId);
   await setDoc(
-    doc(db, 'trips', trip.id),
-    tripDocumentData(trip, user.uid, trip.status || 'accepted'),
+    tripRef,
+    tripDocumentData({ ...trip, tripId }, user.uid, trip.status || 'accepted'),
   );
-  return trip.id;
+  const snapshot = await getDoc(tripRef);
+  if (!snapshot.exists() || snapshot.data().driverId !== user.uid) {
+    throw new Error('El viaje simulado no quedó disponible para el conductor autenticado.');
+  }
+  return tripId;
 }
 
 export async function verifyTripDocument(tripId) {
@@ -180,6 +189,31 @@ export function updateTrip(tripId, fields) {
   });
 }
 
+export function appendTripRoutePoint(tripId, point, routeDataSource) {
+  return appendTripRoutePoints(tripId, [point], routeDataSource);
+}
+
+export function appendTripRoutePoints(tripId, points, routeDataSource) {
+  const user = requireCurrentUser();
+  if (!tripId) throw new Error('El viaje no tiene un identificador válido.');
+  if (!Array.isArray(points) || !points.length || points.some((point) => (
+    !Number.isFinite(point?.latitude) || !Number.isFinite(point?.longitude)
+  ))) {
+    throw new Error('La ruta no tiene coordenadas válidas.');
+  }
+  if (!['device_gps', 'client_demo'].includes(routeDataSource)) {
+    throw new Error('El origen de la ruta no es válido.');
+  }
+  return updateDoc(doc(db, 'trips', tripId), {
+    routeCoordinates: arrayUnion(...points.map((point) => ({
+      latitude: point.latitude,
+      longitude: point.longitude,
+    }))),
+    routeDataSource,
+    updatedAt: serverTimestamp(),
+  }).then(() => user.uid);
+}
+
 export async function completeDriverTrip(tripId, currentLocation) {
   requireCurrentUser();
   if (!tripId) throw new Error('El viaje no tiene un identificador válido.');
@@ -191,6 +225,51 @@ export async function completeDriverTrip(tripId, currentLocation) {
   return result.data;
 }
 
+export async function completeSimulatedTrip(tripId) {
+  const user = requireCurrentUser();
+  if (!tripId) throw new Error('El viaje no tiene un identificador válido.');
+  const tripRef = doc(db, 'trips', tripId);
+  let completion;
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(tripRef);
+    if (!snapshot.exists()) throw new Error('El viaje simulado no existe.');
+
+    const trip = snapshot.data();
+    if (trip.driverId !== user.uid) throw new Error('El viaje no pertenece al conductor autenticado.');
+    if (trip.isSimulated !== true) throw new Error('Los viajes reales requieren backend para finalizarse.');
+    if (trip.status !== 'in_progress') throw new Error('El viaje simulado ya fue finalizado o no está en progreso.');
+
+    const fare = calculateFare({
+      category: trip.category,
+      distanceKm: trip.distanceKm,
+      durationMin: trip.estimatedDurationMinutes,
+      tip: trip.tipCop,
+    });
+    const paymentStatus = ['Efectivo', 'cash'].includes(trip.paymentMethod) ? 'cash' : 'pending';
+    const completedAt = serverTimestamp();
+    completion = {
+      status: 'completed',
+      finalFareCop: fare.fare,
+      platformCommissionCop: fare.commission,
+      driverNetCop: fare.fare - fare.commission,
+      tipCop: fare.tip,
+      commissionRate: fare.commissionRate,
+      paymentStatus,
+      financialDataSource: 'client_demo',
+      completedAt: new Date().toISOString(),
+    };
+
+    transaction.update(tripRef, {
+      ...completion,
+      completedAt,
+      updatedAt: completedAt,
+    });
+  });
+
+  return { tripId, ...completion };
+}
+
 export async function confirmCashPayment(tripId) {
   requireCurrentUser();
   if (!tripId) throw new Error('El viaje no tiene un identificador válido.');
@@ -200,4 +279,35 @@ export async function confirmCashPayment(tripId) {
     throw new Error('La confirmación del efectivo no devolvió una respuesta válida.');
   }
   return result.data;
+}
+
+export async function confirmSimulatedCashPayment(tripId) {
+  const user = requireCurrentUser();
+  if (!tripId) throw new Error('El viaje no tiene un identificador válido.');
+  const tripRef = doc(db, 'trips', tripId);
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(tripRef);
+    if (!snapshot.exists()) throw new Error('El viaje simulado no existe.');
+
+    const trip = snapshot.data();
+    if (trip.driverId !== user.uid) throw new Error('El viaje no pertenece al conductor autenticado.');
+    if (trip.isSimulated !== true) throw new Error('Los viajes reales requieren backend para confirmar pagos.');
+    if (trip.status === 'paid') throw new Error('El efectivo simulado ya fue confirmado.');
+    if (trip.status !== 'completed' || !['Efectivo', 'cash'].includes(trip.paymentMethod)) {
+      throw new Error('El viaje simulado no está listo para confirmar efectivo.');
+    }
+    if (trip.paymentStatus !== 'cash') {
+      throw new Error('El viaje simulado no tiene pago en efectivo.');
+    }
+
+    transaction.update(tripRef, {
+      status: 'paid',
+      paymentStatus: 'paid',
+      paidAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  return { tripId, status: 'paid', paymentStatus: 'paid' };
 }

@@ -29,6 +29,7 @@ const tripPaymentTranslations = {
     payWithMercadoPago: 'Abrir checkout de Mercado Pago',
     openingCheckout: 'Abriendo checkout...',
     checkoutError: 'No se pudo abrir el checkout de Mercado Pago.',
+    backendPaymentPending: 'El pago real requiere un backend desplegado y no está disponible en esta demostración.',
   },
   en: {
     eyebrow: 'UBERCLONE · DRIVER',
@@ -60,6 +61,7 @@ const tripPaymentTranslations = {
     payWithMercadoPago: 'Open Mercado Pago checkout',
     openingCheckout: 'Opening checkout...',
     checkoutError: 'Could not open Mercado Pago checkout.',
+    backendPaymentPending: 'Real payment requires a deployed backend and is unavailable in this demonstration.',
   },
 };
 

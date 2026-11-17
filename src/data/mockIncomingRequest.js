@@ -1,7 +1,12 @@
+let mockRequestSequence = 0;
+
 export function createMockIncomingRequest() {
   const requestId = `mock-request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const paymentMethod = mockRequestSequence % 2 === 0 ? 'Efectivo' : 'Mercado Pago';
+  mockRequestSequence += 1;
   return {
     id: requestId,
+    tripId: requestId,
     isSimulated: true,
     status: 'requested',
     cancellationReason: null,
@@ -12,7 +17,8 @@ export function createMockIncomingRequest() {
     distanceKm: 8.4,
     estimatedDurationMinutes: 24,
     category: 'UberX',
-    paymentMethod: 'Mercado Pago',
+    paymentMethod,
+    paymentStatus: paymentMethod === 'Efectivo' ? 'cash' : 'pending',
     estimatedFareCop: 34_000,
   };
 }

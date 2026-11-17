@@ -53,9 +53,22 @@ function getPeriodRange(period, now, dateFrom, dateTo) {
   return { start, end, valid: true };
 }
 
-function getCompletedAtDate(trip) {
-  const date = new Date(trip.completedAt);
-  return Number.isNaN(date.getTime()) ? null : date;
+function toValidDate(value) {
+  if (value == null) return null;
+  const date = typeof value?.toDate === 'function'
+    ? value.toDate()
+    : value instanceof Date
+      ? value
+      : new Date(value);
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+export function getCompletedAtDate(trip) {
+  return toValidDate(trip.completedAt) ?? toValidDate(trip.paidAt);
+}
+
+function normalizePaymentMethod(value) {
+  return String(value ?? '').trim().toLocaleLowerCase('es-CO');
 }
 
 function getTripAmounts(trip) {
@@ -82,17 +95,27 @@ export function filterCompletedTrips(
   const range = getPeriodRange(period, now, dateFrom, dateTo);
   if (!range.valid) return [];
 
-  return completedTrips
+  const filteredTrips = completedTrips
     .filter((trip) => {
       if (trip.status !== 'completed' && trip.status !== 'paid') return false;
-      if (paymentMethod !== 'all' && trip.paymentMethod !== paymentMethod) return false;
+      if (paymentMethod !== 'all'
+        && normalizePaymentMethod(trip.paymentMethod) !== normalizePaymentMethod(paymentMethod)) return false;
       const completedAt = getCompletedAtDate(trip);
       return completedAt
         && (!range.start || completedAt >= range.start)
         && (!range.end || completedAt < range.end);
     })
     .slice()
-    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+    .sort((a, b) => (getCompletedAtDate(b)?.getTime() ?? 0) - (getCompletedAtDate(a)?.getTime() ?? 0));
+  const seenTripIds = new Set();
+
+  return filteredTrips.filter((trip) => {
+    const tripId = trip.id ?? trip.tripId;
+    if (!tripId) return true;
+    if (seenTripIds.has(tripId)) return false;
+    seenTripIds.add(tripId);
+    return true;
+  });
 }
 
 export function aggregateDriverEarnings(completedTrips = [], period = 'today', now = new Date()) {
@@ -108,13 +131,17 @@ export function aggregateDriverEarnings(completedTrips = [], period = 'today', n
     result.commissionsCop += trip.platformCommissionCop;
     result.tipsCop += trip.tipCop;
     result.generatedNetCop += trip.generatedNetCop;
-    if (trip.paymentStatus === 'cash') {
+    const isCashPayment = ['cash', 'Efectivo'].includes(trip.paymentMethod);
+    const isPaid = trip.paymentStatus === 'paid';
+    if (isCashPayment && isPaid) {
       result.cashGrossReceivedCop += trip.grossFareCop + trip.tipCop;
       result.cashCommissionOwedCop += trip.platformCommissionCop;
       result.cashNetAvailableCop += trip.driverNetCop + trip.tipCop;
-    } else if (trip.paymentStatus === 'approved') {
+    } else if (!isCashPayment && (isPaid || trip.paymentStatus === 'approved')) {
       result.electronicApprovedGrossReceivedCop += trip.grossFareCop + trip.tipCop;
       result.electronicApprovedNetAvailableCop += trip.driverNetCop + trip.tipCop;
+    } else if (isCashPayment && trip.paymentStatus === 'cash') {
+      result.cashPendingCop += trip.grossFareCop + trip.tipCop;
     } else if (trip.paymentStatus === 'pending') {
       result.electronicPendingCop += trip.grossFareCop + trip.tipCop;
     } else if (trip.paymentStatus === 'rejected') {
@@ -129,6 +156,7 @@ export function aggregateDriverEarnings(completedTrips = [], period = 'today', n
     cashGrossReceivedCop: 0,
     cashCommissionOwedCop: 0,
     cashNetAvailableCop: 0,
+    cashPendingCop: 0,
     electronicApprovedGrossReceivedCop: 0,
     electronicApprovedNetAvailableCop: 0,
     electronicPendingCop: 0,

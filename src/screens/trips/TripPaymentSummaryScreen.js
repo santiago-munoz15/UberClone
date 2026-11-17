@@ -7,7 +7,7 @@ import tripPaymentTranslations from '../../config/tripPaymentTranslations';
 import { useDriverTrip } from '../../context/DriverTripContext';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
 import { createMercadoPagoPreference } from '../../services/paymentService';
-import { confirmCashPayment } from '../../services/tripService';
+import { confirmCashPayment, confirmSimulatedCashPayment } from '../../services/tripService';
 
 const COLORS = {
   background: '#F4F5F2',
@@ -25,7 +25,7 @@ const PAYMENT_STATUS_COPY = {
 
 export default function TripPaymentSummaryScreen() {
   const router = useRouter();
-  const { activeTrip } = useDriverTrip();
+  const { activeTrip, clearActiveTrip } = useDriverTrip();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
   const [cashConfirmationLoading, setCashConfirmationLoading] = useState(false);
@@ -58,9 +58,12 @@ export default function TripPaymentSummaryScreen() {
   const [statusKey, confirmationTitleKey, confirmationMessageKey] = PAYMENT_STATUS_COPY[activeTrip.paymentStatus]
     ?? PAYMENT_STATUS_COPY.cash;
   const usesMercadoPago = ['mercado_pago', 'Mercado Pago'].includes(activeTrip.paymentMethod);
-  const canStartCheckout = usesMercadoPago && activeTrip.paymentStatus !== 'approved';
+  const canStartCheckout = !activeTrip.isSimulated && usesMercadoPago && activeTrip.paymentStatus !== 'approved';
   const usesCash = ['cash', 'Efectivo'].includes(activeTrip.paymentMethod);
-  const canConfirmCash = usesCash && activeTrip.status === 'completed' && activeTrip.paymentStatus === 'cash';
+  const canConfirmCash = activeTrip.isSimulated
+    && usesCash
+    && activeTrip.status === 'completed'
+    && activeTrip.paymentStatus === 'cash';
 
   async function handleCheckout() {
     setCheckoutError(null);
@@ -79,7 +82,8 @@ export default function TripPaymentSummaryScreen() {
     setCashConfirmationError(null);
     setCashConfirmationLoading(true);
     try {
-      await confirmCashPayment(activeTrip.tripId || activeTrip.id);
+      const confirmPayment = activeTrip.isSimulated ? confirmSimulatedCashPayment : confirmCashPayment;
+      await confirmPayment(activeTrip.tripId || activeTrip.id);
     } catch (error) {
       console.error('No se pudo confirmar el efectivo recibido:', error);
       setCashConfirmationError(copy.cashConfirmationError);
@@ -145,6 +149,9 @@ export default function TripPaymentSummaryScreen() {
             {checkoutError ? <Text style={styles.errorText}>{checkoutError}</Text> : null}
           </View>
         ) : null}
+        {activeTrip.isSimulated && usesMercadoPago ? (
+          <Text style={styles.noticeText}>{copy.backendPaymentPending}</Text>
+        ) : null}
 
         {canConfirmCash ? (
           <View>
@@ -164,7 +171,10 @@ export default function TripPaymentSummaryScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.replace('/driver-preview')}
+          onPress={() => {
+            clearActiveTrip();
+            router.replace('/driver-preview');
+          }}
           style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}
         >
           <Text style={styles.homeButtonText}>{copy.backHome}</Text>

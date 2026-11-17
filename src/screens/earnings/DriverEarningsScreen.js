@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import driverEarningsTranslations from '../../config/driverEarningsTranslations';
 import useEarnings from '../../hooks/useEarnings';
+import { getCompletedAtDate } from '../../utils/aggregateDriverEarnings';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
 
 const COLORS = {
@@ -19,7 +20,8 @@ const PAYMENT_STATUS_KEYS = {
   approved: 'approved',
   pending: 'paymentPending',
   rejected: 'paymentRejected',
-  cash: 'paymentCash',
+  cash: 'paymentCashPending',
+  paid: 'paid',
 };
 
 export default function DriverEarningsScreen() {
@@ -79,6 +81,7 @@ export default function DriverEarningsScreen() {
             <SummaryRow label={copy.cashGross} value={summary.cashGrossReceivedCop} />
             <SummaryRow label={copy.cashCommission} value={summary.cashCommissionOwedCop} negative />
             <SummaryRow label={copy.cashNet} value={summary.cashNetAvailableCop} strong />
+            <SummaryRow label={copy.cashPending} value={summary.cashPendingCop} />
             <View style={styles.divider} />
             <Text style={styles.balanceSubheading}>{copy.electronic}</Text>
             <SummaryRow label={copy.electronicGross} value={summary.electronicApprovedGrossReceivedCop} />
@@ -144,10 +147,13 @@ function SummaryRow({ label, value, negative = false, strong = false, emphasized
 
 function TripCard({ trip, copy, language }) {
   const paymentStatusKey = PAYMENT_STATUS_KEYS[trip.paymentStatus] ?? 'paymentPending';
-  const completedDate = new Date(trip.completedAt).toLocaleString(language === 'en' ? 'en-US' : 'es-CO', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  const completedAt = getCompletedAtDate(trip);
+  const completedDate = completedAt
+    ? completedAt.toLocaleString(language === 'en' ? 'en-US' : 'es-CO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
+    : copy.dateUnavailable;
 
   return (
     <View style={styles.tripCard}>

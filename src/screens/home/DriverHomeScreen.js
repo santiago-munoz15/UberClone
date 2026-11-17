@@ -6,6 +6,7 @@ import driverHomeTranslations from '../../config/driverHomeTranslations';
 import useDriverLocation from '../../hooks/useDriverLocation';
 import { useDriverAvailability } from '../../context/DriverAvailabilityContext';
 import { useDriverTrip } from '../../context/DriverTripContext';
+import { isTerminalTripStatus } from '../../utils/tripStatus';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -44,7 +45,7 @@ export default function DriverHomeScreen() {
   const { isAvailable, toggleAvailability } = useDriverAvailability();
   const location = useDriverLocation(isAvailable);
   const { activeTrip, isHydrated } = useDriverTrip();
-  const hasUnfinishedTrip = activeTrip && activeTrip.status !== 'completed';
+  const hasUnfinishedTrip = activeTrip && !isTerminalTripStatus(activeTrip.status);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>

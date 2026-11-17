@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import tripHistoryTranslations from '../../config/tripHistoryTranslations';
 import driverEarningsTranslations from '../../config/driverEarningsTranslations';
 import { useDriverTrip } from '../../context/DriverTripContext';
-import { filterCompletedTrips } from '../../utils/aggregateDriverEarnings';
+import { filterCompletedTrips, getCompletedAtDate } from '../../utils/aggregateDriverEarnings';
 import { formatCopCurrency } from '../../utils/formatCopCurrency';
 
 const COLORS = {
@@ -29,6 +29,7 @@ const PAYMENT_STATUS_KEYS = {
   pending: 'pending',
   rejected: 'rejected',
   cash: 'cash',
+  paid: 'paid',
 };
 
 function toLocalDateString(date) {
@@ -256,8 +257,8 @@ function DateButton({ label, value, placeholder, onPress }) {
 
 function HistoryTripCard({ trip, copy, earningsCopy, language }) {
   const paymentStatusKey = PAYMENT_STATUS_KEYS[trip.paymentStatus] ?? 'pending';
-  const date = new Date(trip.completedAt);
-  const dateText = Number.isNaN(date.getTime())
+  const date = getCompletedAtDate(trip);
+  const dateText = !date
     ? copy.notAvailable
     : date.toLocaleString(language === 'en' ? 'en-US' : 'es-CO', { dateStyle: 'medium', timeStyle: 'short' });
   const netCop = Number(trip.driverNetCop) + (Number(trip.tipCop) || 0);

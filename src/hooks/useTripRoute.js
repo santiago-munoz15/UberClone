@@ -21,7 +21,7 @@ function getActiveLeg(status) {
   return null;
 }
 
-export default function useTripRoute({ status, location, pickup, destination }) {
+export default function useTripRoute({ status, location, pickup, destination, isSimulated = false }) {
   const [result, setResult] = useState({ leg: null, route: null, status: 'idle', error: null });
   const [refreshCount, setRefreshCount] = useState(0);
   const controllerRef = useRef(null);
@@ -29,16 +29,16 @@ export default function useTripRoute({ status, location, pickup, destination }) 
   const lastLegRef = useRef(null);
   const latestLocationRef = useRef(location);
   const retryTimerRef = useRef(null);
-
-  useEffect(() => {
-    latestLocationRef.current = location;
-  }, [location]);
-
   const leg = getActiveLeg(status);
   const target = leg === 'pickup' ? pickup : leg === 'destination' ? destination : null;
+  const routeOrigin = isSimulated && status === 'in_progress' ? pickup : location;
 
   useEffect(() => {
-    if (!leg || !location || !target) {
+    latestLocationRef.current = routeOrigin;
+  }, [routeOrigin]);
+
+  useEffect(() => {
+    if (!leg || !routeOrigin || !target) {
       if (!leg) {
         controllerRef.current?.abort();
         controllerRef.current = null;
@@ -49,26 +49,26 @@ export default function useTripRoute({ status, location, pickup, destination }) 
     }
 
     const legChanged = lastLegRef.current !== leg;
-    const movedEnough = distanceBetween(lastRequestOriginRef.current, location) >= MIN_REROUTE_DISTANCE_METERS;
+    const movedEnough = distanceBetween(lastRequestOriginRef.current, routeOrigin) >= MIN_REROUTE_DISTANCE_METERS;
     if (!legChanged && !movedEnough && lastRequestOriginRef.current) return undefined;
 
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
     lastLegRef.current = leg;
-    lastRequestOriginRef.current = location;
+    lastRequestOriginRef.current = routeOrigin;
 
     Promise.resolve()
       .then(() => {
         if (controller.signal.aborted) return null;
         setResult({ leg, route: null, status: 'loading', error: null });
-        return fetchDrivingRoute(location, target, controller.signal);
+        return fetchDrivingRoute(routeOrigin, target, controller.signal);
       })
       .then((nextRoute) => {
         if (controller.signal.aborted || !nextRoute) return;
         setResult({
           leg,
-          route: { ...nextRoute, leg, requestedFrom: location, id: `${leg}-${Date.now()}` },
+          route: { ...nextRoute, leg, requestedFrom: routeOrigin, id: `${leg}-${Date.now()}` },
           status: 'ready',
           error: null,
         });
@@ -86,7 +86,7 @@ export default function useTripRoute({ status, location, pickup, destination }) 
       });
 
     return undefined;
-  }, [leg, location, target, refreshCount]);
+  }, [isSimulated, leg, routeOrigin, target, refreshCount]);
 
   useEffect(() => () => {
     controllerRef.current?.abort();
@@ -101,7 +101,7 @@ export default function useTripRoute({ status, location, pickup, destination }) 
   const currentResult = result.leg === leg ? result : null;
   return {
     route: currentResult?.route ?? null,
-    status: !leg || !location ? 'idle' : currentResult?.status ?? 'loading',
+    status: !leg || !routeOrigin ? 'idle' : currentResult?.status ?? 'loading',
     error: currentResult?.error ?? null,
     retry,
   };

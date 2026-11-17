@@ -12,6 +12,7 @@ import useTripRequests from '../../hooks/useTripRequests';
 import { transitionIncomingRequest } from '../../utils/transitionIncomingRequest';
 import { useDriverTrip } from '../../context/DriverTripContext';
 import { updateTrip } from '../../services/tripService';
+import { isTerminalTripStatus } from '../../utils/tripStatus';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -71,7 +72,7 @@ export default function IncomingRequestScreen() {
   const remainingSeconds = useIncomingRequestCountdown({ isActive: isPending && isHydrated, onExpire: expireRequest });
   const timerProgress = (remainingSeconds / INCOMING_REQUEST_TIMEOUT_SECONDS) * 100;
 
-  if (activeTrip && activeTrip.status !== 'completed') return <Redirect href="/active-trip" />;
+  if (activeTrip && !isTerminalTripStatus(activeTrip.status)) return <Redirect href="/active-trip" />;
   if (!request) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
