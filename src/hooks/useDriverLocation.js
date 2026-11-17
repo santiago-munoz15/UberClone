@@ -1,57 +1,102 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Location from 'expo-location';
 import { updateDriverLocation } from '../services/tripService';
 
-const DEFAULT_LOCATION = Object.freeze({
-  latitude: 6.2442,
-  longitude: -75.5812,
-  label: 'Ubicación no disponible',
+const EMPTY_LOCATION = Object.freeze({
+  latitude: null,
+  longitude: null,
+  accuracy: null,
+  timestamp: null,
   source: 'unavailable',
-  lastUpdatedAt: new Date(0),
+  status: 'disabled',
+  lastUpdatedAt: null,
+  sessionKey: null,
 });
 
 export default function useDriverLocation(enabled = false) {
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
+  const [location, setLocation] = useState(EMPTY_LOCATION);
+  const [retryCount, setRetryCount] = useState(0);
+  const sessionKey = `${enabled}:${retryCount}`;
 
   useEffect(() => {
     if (!enabled) return undefined;
+
     let isMounted = true;
     let subscription;
+    let noFixTimeout;
+
+    const setUnavailableStatus = (status) => {
+      if (!isMounted) return;
+      setLocation({ ...EMPTY_LOCATION, status, sessionKey });
+    };
+    const monitorForLocationUpdates = () => {
+      clearTimeout(noFixTimeout);
+      noFixTimeout = setTimeout(() => {
+        setLocation((current) => (
+          current.source === 'device' && Date.now() - current.timestamp < 15000
+            ? current
+            : { ...EMPTY_LOCATION, status: 'locationError', sessionKey }
+        ));
+      }, 15000);
+    };
 
     async function startWatching() {
+      setUnavailableStatus('requesting');
       try {
         const permission = await Location.requestForegroundPermissionsAsync();
+        if (!isMounted) return;
         if (!permission.granted) {
-          throw new Error('LOCATION_PERMISSION_DENIED');
+          setUnavailableStatus('permissionDenied');
+          return;
         }
 
-        subscription = await Location.watchPositionAsync(
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!isMounted) return;
+        if (!servicesEnabled) {
+          setUnavailableStatus('gpsDisabled');
+          return;
+        }
+
+        setUnavailableStatus('locating');
+        monitorForLocationUpdates();
+
+        const nextSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
             distanceInterval: 10,
             timeInterval: 5000,
           },
           (position) => {
+            if (!isMounted) return;
+            monitorForLocationUpdates();
             const nextLocation = {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy,
               timestamp: position.timestamp,
-              label: 'Ubicación actual',
               source: 'device',
+              status: 'device',
               lastUpdatedAt: new Date(position.timestamp),
+              sessionKey,
             };
-            if (!isMounted) return;
             setLocation(nextLocation);
             updateDriverLocation(nextLocation).catch((error) => {
               console.error('No se pudo sincronizar la ubicación del conductor:', error);
             });
           },
+          () => {
+            clearTimeout(noFixTimeout);
+            setUnavailableStatus('locationError');
+          },
         );
-      } catch (error) {
-        if (isMounted) {
-          setLocation((current) => ({ ...current, source: 'unavailable' }));
+
+        if (!isMounted) {
+          nextSubscription.remove();
+          return;
         }
+        subscription = nextSubscription;
+      } catch (error) {
+        setUnavailableStatus(error?.code === 'E_LOCATION_SERVICES_DISABLED' ? 'gpsDisabled' : 'locationError');
         console.error('No se pudo iniciar el seguimiento de ubicación:', error);
       }
     }
@@ -59,9 +104,16 @@ export default function useDriverLocation(enabled = false) {
     startWatching();
     return () => {
       isMounted = false;
+      clearTimeout(noFixTimeout);
       subscription?.remove();
     };
-  }, [enabled]);
+  }, [enabled, retryCount, sessionKey]);
 
-  return useMemo(() => location, [location]);
+  const retry = useCallback(() => setRetryCount((count) => count + 1), []);
+  return useMemo(() => ({
+    ...(location.sessionKey === sessionKey
+      ? location
+      : { ...EMPTY_LOCATION, status: enabled ? 'requesting' : 'disabled', sessionKey }),
+    retry,
+  }), [enabled, location, retry, sessionKey]);
 }

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PRICING } from '../../config/pricing';
 import tripPaymentTranslations from '../../config/tripPaymentTranslations';
@@ -20,7 +20,8 @@ const PAYMENT_STATUS_COPY = {
   approved: ['approvedStatus', 'approvedTitle', 'approvedMessage'],
   pending: ['pendingStatus', 'pendingTitle', 'pendingMessage'],
   rejected: ['rejectedStatus', 'rejectedTitle', 'rejectedMessage'],
-  cash: ['cashStatus', 'cashTitle', 'cashMessage'],
+  cash: ['cashStatus', 'cashPendingTitle', 'cashPendingMessage'],
+  paid: ['paidStatus', 'cashTitle', 'cashConfirmedMessage'],
 };
 
 export default function TripPaymentSummaryScreen() {
@@ -30,6 +31,8 @@ export default function TripPaymentSummaryScreen() {
   const [checkoutError, setCheckoutError] = useState(null);
   const [cashConfirmationLoading, setCashConfirmationLoading] = useState(false);
   const [cashConfirmationError, setCashConfirmationError] = useState(null);
+  const cashConfirmationLock = useRef(false);
+  const [cashConfirmationComplete, setCashConfirmationComplete] = useState(false);
   const language = activeTrip?.language === 'en' ? 'en' : 'es';
   const copy = tripPaymentTranslations[language];
   const finalFareCop = activeTrip?.finalFareCop ?? activeTrip?.estimatedFareCop ?? 0;
@@ -55,13 +58,13 @@ export default function TripPaymentSummaryScreen() {
     );
   }
 
-  const [statusKey, confirmationTitleKey, confirmationMessageKey] = PAYMENT_STATUS_COPY[activeTrip.paymentStatus]
+  const displayedPaymentStatus = cashConfirmationComplete ? 'paid' : activeTrip.paymentStatus;
+  const [statusKey, confirmationTitleKey, confirmationMessageKey] = PAYMENT_STATUS_COPY[displayedPaymentStatus]
     ?? PAYMENT_STATUS_COPY.cash;
   const usesMercadoPago = ['mercado_pago', 'Mercado Pago'].includes(activeTrip.paymentMethod);
   const canStartCheckout = !activeTrip.isSimulated && usesMercadoPago && activeTrip.paymentStatus !== 'approved';
   const usesCash = ['cash', 'Efectivo'].includes(activeTrip.paymentMethod);
-  const canConfirmCash = activeTrip.isSimulated
-    && usesCash
+  const canConfirmCash = usesCash
     && activeTrip.status === 'completed'
     && activeTrip.paymentStatus === 'cash';
 
@@ -79,12 +82,22 @@ export default function TripPaymentSummaryScreen() {
   }
 
   async function handleCashConfirmation() {
+    if (cashConfirmationLock.current) return;
+    cashConfirmationLock.current = true;
     setCashConfirmationError(null);
     setCashConfirmationLoading(true);
     try {
       const confirmPayment = activeTrip.isSimulated ? confirmSimulatedCashPayment : confirmCashPayment;
-      await confirmPayment(activeTrip.tripId || activeTrip.id);
+      const result = await confirmPayment(activeTrip.tripId || activeTrip.id);
+      if (result?.status !== 'paid' || result?.paymentStatus !== 'paid') {
+        throw new Error('La confirmación no registró el pago como pagado.');
+      }
+      setCashConfirmationComplete(true);
+      if (!result.alreadyConfirmed) {
+        Alert.alert(copy.cashTitle, copy.cashConfirmedMessage);
+      }
     } catch (error) {
+      cashConfirmationLock.current = false;
       console.error('No se pudo confirmar el efectivo recibido:', error);
       setCashConfirmationError(copy.cashConfirmationError);
     } finally {
@@ -111,8 +124,12 @@ export default function TripPaymentSummaryScreen() {
           <Text style={styles.noticeText}>{copy.simulationNotice}</Text>
         </View>
 
-        <View style={styles.confirmationCard}>
-          <View style={styles.confirmationMark}><Text style={styles.checkmark}>✓</Text></View>
+        <View style={[styles.confirmationCard, displayedPaymentStatus === 'cash' && styles.pendingPaymentCard]}>
+          <View style={styles.confirmationMark}>
+            <Text style={[styles.checkmark, displayedPaymentStatus === 'cash' && styles.pendingPaymentMark]}>
+              {displayedPaymentStatus === 'cash' ? '!' : '✓'}
+            </Text>
+          </View>
           <Text style={styles.confirmationTitle}>{copy[confirmationTitleKey]}</Text>
           <Text style={styles.confirmationMessage}>{copy[confirmationMessageKey]}</Text>
         </View>
@@ -153,7 +170,7 @@ export default function TripPaymentSummaryScreen() {
           <Text style={styles.noticeText}>{copy.backendPaymentPending}</Text>
         ) : null}
 
-        {canConfirmCash ? (
+        {canConfirmCash && !cashConfirmationComplete ? (
           <View>
             <Pressable
               accessibilityRole="button"
@@ -206,8 +223,10 @@ const styles = StyleSheet.create({
   notice: { alignItems: 'center', paddingVertical: 11 },
   noticeText: { color: COLORS.muted, fontSize: 10, lineHeight: 15, textAlign: 'center' },
   confirmationCard: { alignItems: 'center', backgroundColor: '#EAF3E6', borderColor: '#C9DDAF', borderRadius: 18, borderWidth: 1, padding: 20 },
+  pendingPaymentCard: { backgroundColor: '#FFF8E5', borderColor: '#E8D89B' },
   confirmationMark: { alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 20, height: 40, justifyContent: 'center', width: 40 },
   checkmark: { color: '#506518', fontSize: 22, fontWeight: '900' },
+  pendingPaymentMark: { color: '#8A6B14' },
   confirmationTitle: { color: COLORS.ink, fontSize: 18, fontWeight: '900', marginTop: 10, textAlign: 'center' },
   confirmationMessage: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 5, textAlign: 'center' },
   summaryCard: { backgroundColor: COLORS.white, borderRadius: 18, marginTop: 14, paddingHorizontal: 16 },
