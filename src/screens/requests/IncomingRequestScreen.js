@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import incomingRequestTranslations from '../../config/incomingRequestTranslations';
@@ -29,12 +29,31 @@ const currencyFormatter = new Intl.NumberFormat('es-CO', {
 });
 
 export default function IncomingRequestScreen() {
-  const router = useRouter();
   const { activeTrip } = useDriverTrip();
+  const params = useLocalSearchParams();
+  const rawRequestGeneration = params.requestGeneration;
+  const requestGeneration = Array.isArray(rawRequestGeneration)
+    ? rawRequestGeneration[0]
+    : rawRequestGeneration;
+
+  if (activeTrip && !isTerminalTripStatus(activeTrip.status)) {
+    return <Redirect href="/active-trip" />;
+  }
+
+  return (
+    <IncomingRequestSession
+      key={requestGeneration || 'incoming-request'}
+      isDemoRequestFlow={Boolean(requestGeneration)}
+    />
+  );
+}
+
+function IncomingRequestSession({ isDemoRequestFlow }) {
+  const router = useRouter();
   const { incomingTrips, isHydrated, startTrip } = useTripRequests();
   const copy = incomingRequestTranslations.es;
   const [localRequest, setLocalRequest] = useState(() => (__DEV__ ? createMockIncomingRequest() : null));
-  const request = incomingTrips[0] ?? localRequest;
+  const request = isDemoRequestFlow ? localRequest : incomingTrips[0] ?? localRequest;
   const earnings = useMemo(() => calculateFare({
     category: request?.category,
     distanceKm: request?.distanceKm,
@@ -68,11 +87,14 @@ export default function IncomingRequestScreen() {
     [finishRequest],
   );
   const expireRequest = useCallback(() => rejectRequest('timeout'), [rejectRequest]);
+  const returnHome = useCallback(() => {
+    if (request?.isSimulated) setLocalRequest(null);
+    router.replace('/driver-preview');
+  }, [request, router]);
   const isPending = request?.status === 'requested';
   const remainingSeconds = useIncomingRequestCountdown({ isActive: isPending && isHydrated, onExpire: expireRequest });
   const timerProgress = (remainingSeconds / INCOMING_REQUEST_TIMEOUT_SECONDS) * 100;
 
-  if (activeTrip && !isTerminalTripStatus(activeTrip.status)) return <Redirect href="/active-trip" />;
   if (!request) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -81,7 +103,7 @@ export default function IncomingRequestScreen() {
           <Text style={styles.noticeText}>No hay solicitudes pendientes en este momento.</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.replace('/driver-preview')}
+            onPress={returnHome}
             style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}
           >
             <Text style={styles.homeButtonText}>{copy.backHome}</Text>
@@ -204,7 +226,7 @@ export default function IncomingRequestScreen() {
         ) : (
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.replace('/driver-preview')}
+            onPress={returnHome}
             style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}
           >
             <Text style={styles.homeButtonText}>{copy.backHome}</Text>

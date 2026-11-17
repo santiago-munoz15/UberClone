@@ -172,6 +172,7 @@ service cloud.firestore {
                 && request.resource.data.paymentMethod in ['cash', 'Efectivo']
                 && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                   'status',
+                  'paymentStatus',
                   'paidAt',
                   'updatedAt'
                 ])
@@ -196,7 +197,7 @@ service cloud.firestore {
               'in_progress'
             ]
           )
-        ));
+        );
       allow delete: if isAdmin();
     }
 

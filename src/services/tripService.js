@@ -286,14 +286,17 @@ export async function confirmSimulatedCashPayment(tripId) {
   if (!tripId) throw new Error('El viaje no tiene un identificador válido.');
   const tripRef = doc(db, 'trips', tripId);
 
-  await runTransaction(db, async (transaction) => {
+  const alreadyConfirmed = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(tripRef);
     if (!snapshot.exists()) throw new Error('El viaje simulado no existe.');
 
     const trip = snapshot.data();
     if (trip.driverId !== user.uid) throw new Error('El viaje no pertenece al conductor autenticado.');
     if (trip.isSimulated !== true) throw new Error('Los viajes reales requieren backend para confirmar pagos.');
-    if (trip.status === 'paid') throw new Error('El efectivo simulado ya fue confirmado.');
+    if (!['Efectivo', 'cash'].includes(trip.paymentMethod)) {
+      throw new Error('El viaje simulado no corresponde a un pago en efectivo.');
+    }
+    if (trip.status === 'paid' && trip.paymentStatus === 'paid') return true;
     if (trip.status !== 'completed' || !['Efectivo', 'cash'].includes(trip.paymentMethod)) {
       throw new Error('El viaje simulado no está listo para confirmar efectivo.');
     }
@@ -307,7 +310,8 @@ export async function confirmSimulatedCashPayment(tripId) {
       paidAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    return false;
   });
 
-  return { tripId, status: 'paid', paymentStatus: 'paid' };
+  return { tripId, status: 'paid', paymentStatus: 'paid', alreadyConfirmed };
 }

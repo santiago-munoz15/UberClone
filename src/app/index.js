@@ -4,7 +4,6 @@ import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DriverAccessScreen from '../screens/auth/DriverAccessScreen';
 import DriverReviewScreen from '../screens/auth/DriverReviewScreen';
-import DriverRegistrationScreen from '../screens/register/DriverRegistrationScreen';
 import { DriverAuthProvider, useDriverAuth } from '../context/DriverAuthContext';
 import { createDriverAccount, resetDriverPassword, signInDriver, signOutDriver } from '../services/authService';
 
@@ -54,7 +53,7 @@ function HomeRouteContent() {
   }
 
   if (!driver || (driver.status === 'rejected' && editingRejected)) {
-    return <DriverRegistrationScreen />;
+    return <Redirect href="/register/personal" />;
   }
 
   if (driver.status === 'pending' || driver.status === 'rejected') {

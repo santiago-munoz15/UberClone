@@ -3,6 +3,7 @@ import { Link, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DrawerMenuButton from '../../components/navigation/DrawerMenuButton';
 import tripHistoryTranslations from '../../config/tripHistoryTranslations';
 import { useDriverTrip } from '../../context/DriverTripContext';
 import { getCompletedAtDate } from '../../utils/aggregateDriverEarnings';
@@ -45,6 +46,9 @@ export default function TripHistoryDetailScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+      <View style={styles.navigationHeader}>
+        <DrawerMenuButton accessibilityLabel={copy.openDrawer} />
+      </View>
       {!trip ? (
         <View style={styles.notFound}>
           <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
@@ -226,6 +230,7 @@ function HistoryLink({ copy }) {
   return (
     <Link href="/trip-history" replace asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+        <Text style={styles.backArrow}>←</Text>
         <Text style={styles.backButtonText}>{copy.backToHistory}</Text>
       </Pressable>
     </Link>
@@ -234,6 +239,7 @@ function HistoryLink({ copy }) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.background, flex: 1 },
+  navigationHeader: { paddingHorizontal: 20, paddingTop: 8 },
   content: { paddingBottom: 32, paddingHorizontal: 20, paddingTop: 17 },
   eyebrow: { color: COLORS.muted, fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: COLORS.ink, fontSize: 25, fontWeight: '900', letterSpacing: -0.6, marginTop: 6 },
@@ -264,7 +270,8 @@ const styles = StyleSheet.create({
   ratingValue: { color: COLORS.ink, fontSize: 12, fontWeight: '800' },
   notFound: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   message: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
-  backButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 14, justifyContent: 'center', marginTop: 18, minHeight: 52, paddingHorizontal: 14 },
+  backButton: { alignItems: 'center', backgroundColor: COLORS.ink, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', marginTop: 18, minHeight: 52, paddingHorizontal: 14 },
+  backArrow: { color: '#B7D52B', fontSize: 20, fontWeight: '800', marginRight: 10 },
   backButtonText: { color: COLORS.white, fontSize: 12, fontWeight: '800' },
   pressed: { opacity: 0.75 },
 });

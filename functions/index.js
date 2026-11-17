@@ -183,6 +183,7 @@ exports.confirmCashPayment = onCall(
 
       transaction.update(tripRef, {
         status: 'paid',
+        paymentStatus: 'paid',
         paidAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -191,7 +192,7 @@ exports.confirmCashPayment = onCall(
     return {
       tripId,
       status: 'paid',
-      paymentStatus: 'cash',
+      paymentStatus: 'paid',
     };
   },
 );
