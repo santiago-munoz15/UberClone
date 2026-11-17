@@ -1,0 +1,208 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.get('admin', false) == true;
+    }
+
+    match /drivers/{driverId} {
+      allow create: if signedIn()
+        && request.auth.uid == driverId
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly([
+          'personalInfo',
+          'vehicleInfo',
+          'driverDocuments',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
+
+      allow update: if isAdmin()
+        || (signedIn()
+          && request.auth.uid == driverId
+          && (
+            (
+              request.resource.data.status == 'approved'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'isAvailable',
+                'lastLocation',
+                'pushToken',
+                'pushPlatform',
+                'updatedAt'
+              ])
+            )
+            || (
+              resource.data.status == 'pending'
+              && request.resource.data.status == 'pending'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'personalInfo',
+                'vehicleInfo',
+                'driverDocuments',
+                'updatedAt'
+              ])
+            )
+            || (
+              resource.data.status == 'rejected'
+              && request.resource.data.status == 'pending'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'personalInfo',
+                'vehicleInfo',
+                'driverDocuments',
+                'status',
+                'updatedAt'
+              ])
+            )
+          ));
+
+      allow delete: if isAdmin();
+    }
+
+    match /trips/{tripId} {
+      allow read: if signedIn()
+        && (isAdmin()
+          || resource.data.driverId == request.auth.uid
+          || resource.data.passengerId == request.auth.uid);
+      allow create: if signedIn()
+        && (
+          (
+            request.resource.data.passengerId == request.auth.uid
+            && request.resource.data.get('status', '') == 'requested'
+          )
+          || (
+            request.resource.data.driverId == request.auth.uid
+            && request.resource.data.get('isSimulated', false) == true
+            && request.resource.data.get('status', '') == 'accepted'
+          )
+        )
+        && request.resource.data.get('paymentStatus', '') in ['', 'cash', 'pending']
+        && !request.resource.data.keys().hasAny([
+          'finalFareCop',
+          'platformCommissionCop',
+          'driverNetCop',
+          'commissionRate',
+          'paymentId',
+          'paymentPreferenceId'
+        ]);
+
+      allow update: if signedIn()
+        && (isAdmin()
+          || (
+            resource.data.driverId == request.auth.uid
+            && request.resource.data.driverId == resource.data.driverId
+            && (
+              (
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'status',
+                  'cancellationReason',
+                  'updatedAt'
+                ])
+                && (
+                  (resource.data.status == 'requested'
+                    && request.resource.data.status in ['accepted', 'cancelled'])
+                  || (resource.data.status == 'accepted'
+                    && request.resource.data.status in ['driver_arriving', 'arriving'])
+                  || (resource.data.status == 'driver_arriving'
+                    && request.resource.data.status in ['arriving', 'onboard'])
+                  || (resource.data.status == 'arriving'
+                    && request.resource.data.status == 'onboard')
+                  || (resource.data.status == 'onboard'
+                    && request.resource.data.status == 'in_progress')
+                )
+              )
+              || (
+                resource.data.status == 'in_progress'
+                && request.resource.data.status == 'in_progress'
+                && request.resource.data.routeCoordinates is list
+                && request.resource.data.routeCoordinates.size() <= 500
+                && (
+                  (resource.data.isSimulated == true
+                    && request.resource.data.routeDataSource in ['device_gps', 'client_demo'])
+                  || (resource.data.isSimulated != true
+                    && request.resource.data.routeDataSource == 'device_gps')
+                )
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'routeCoordinates',
+                  'routeDataSource',
+                  'updatedAt'
+                ])
+              )
+              || (
+                resource.data.isSimulated == true
+                && request.resource.data.isSimulated == true
+                && resource.data.status == 'in_progress'
+                && request.resource.data.status == 'completed'
+                && request.resource.data.financialDataSource == 'client_demo'
+                && request.resource.data.finalFareCop is int
+                && request.resource.data.finalFareCop >= 0
+                && request.resource.data.platformCommissionCop is int
+                && request.resource.data.platformCommissionCop >= 0
+                && request.resource.data.driverNetCop is int
+                && request.resource.data.driverNetCop >= 0
+                && request.resource.data.tipCop is int
+                && request.resource.data.tipCop >= 0
+                && request.resource.data.commissionRate == 0.2
+                && request.resource.data.paymentStatus in ['cash', 'pending']
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'status',
+                  'finalFareCop',
+                  'platformCommissionCop',
+                  'driverNetCop',
+                  'tipCop',
+                  'commissionRate',
+                  'paymentStatus',
+                  'financialDataSource',
+                  'completedAt',
+                  'updatedAt'
+                ])
+              )
+              || (
+                resource.data.isSimulated == true
+                && request.resource.data.isSimulated == true
+                && resource.data.status == 'completed'
+                && request.resource.data.status == 'paid'
+                && resource.data.paymentStatus == 'cash'
+                && request.resource.data.paymentStatus == 'paid'
+                && request.resource.data.paymentMethod in ['cash', 'Efectivo']
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'status',
+                  'paymentStatus',
+                  'paidAt',
+                  'updatedAt'
+                ])
+              )
+            )
+          )
+          || (
+            resource.data.passengerId == request.auth.uid
+            && request.resource.data.driverId == resource.data.driverId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'cancellationReason',
+              'updatedAt'
+            ])
+            && request.resource.data.status == 'cancelled'
+            && resource.data.status in [
+              'requested',
+              'accepted',
+              'driver_arriving',
+              'arriving',
+              'onboard',
+              'in_progress'
+            ]
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

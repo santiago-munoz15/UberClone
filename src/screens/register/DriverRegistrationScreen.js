@@ -1,17 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { signOutDriver } from '../../services/authService';
 import PersonalInfoForm from '../../components/registration/PersonalInfoForm';
 import DocumentPaymentForm from '../../components/registration/DocumentPaymentForm';
-import RegistrationStepPlaceholder from '../../components/registration/RegistrationStepPlaceholder';
-import RegistrationStepTabs, { REGISTRATION_STEPS } from '../../components/registration/RegistrationStepTabs';
 import VehicleInfoForm from '../../components/registration/VehicleInfoForm';
-import translations from '../../config/registrationTranslations';
-import { createEmptyPersonalInfo, validatePersonalInfo } from '../../utils/validatePersonalInfo';
-import { createEmptyVehicleInfo, validateVehicleInfo } from '../../utils/validateVehicleInfo';
-import { createEmptyDriverDocuments, validateDriverDocuments } from '../../utils/validateDriverDocuments';
-import { saveDriverRegistration } from '../../services/driverService';
-import { uploadDriverImages } from '../../services/cloudinaryService';
+import { useDriverRegistration } from '../../context/DriverRegistrationContext';
 
 const COLORS = {
   accent: '#B7D52B',
@@ -21,172 +16,107 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
-export default function DriverRegistrationScreen() {
-  const [activeStep, setActiveStep] = useState(0);
-  const [isComplete, setIsComplete] = useState(false);
-  const [personalInfo, setPersonalInfo] = useState(createEmptyPersonalInfo);
-  const [vehicleInfo, setVehicleInfo] = useState(createEmptyVehicleInfo);
-  const [driverDocuments, setDriverDocuments] = useState(createEmptyDriverDocuments);
-  const [touched, setTouched] = useState({});
-  const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
-  const [vehicleTouched, setVehicleTouched] = useState({});
-  const [hasAttemptedVehicleContinue, setHasAttemptedVehicleContinue] = useState(false);
-  const [personalFormOffset, setPersonalFormOffset] = useState(0);
-  const [vehicleFormOffset, setVehicleFormOffset] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
+const REGISTRATION_ROUTES = ['personal', 'vehicle', 'documents'];
+
+export default function DriverRegistrationScreen({ stepIndex }) {
+  const registration = useDriverRegistration();
+  const {
+    copy,
+    documentErrors,
+    driverDocuments,
+    errors,
+    hasAttemptedContinue,
+    hasAttemptedVehicleContinue,
+    hasDocumentErrors,
+    hasPersonalInfoErrors,
+    hasVehicleInfoErrors,
+    isSaving,
+    markTouched,
+    markVehicleTouched,
+    personalInfo,
+    setHasAttemptedContinue,
+    setHasAttemptedVehicleContinue,
+    showPersonalInfoErrors,
+    showVehicleInfoErrors,
+    submitRegistration,
+    touched,
+    updateDriverDocuments,
+    updatePersonalInfo,
+    updateVehicleInfo,
+    vehicleErrors,
+    vehicleInfo,
+    vehicleTouched,
+  } = registration;
   const scrollRef = useRef(null);
+  const [formOffset, setFormOffset] = useState(0);
+  const isLastStep = stepIndex === REGISTRATION_ROUTES.length - 1;
+  const continueDisabled = (stepIndex === 0 && hasAttemptedContinue && hasPersonalInfoErrors)
+    || (stepIndex === 1 && hasAttemptedVehicleContinue && hasVehicleInfoErrors)
+    || (stepIndex === 2 && (hasPersonalInfoErrors || hasVehicleInfoErrors || hasDocumentErrors));
 
-  const copy = translations[personalInfo.language] || translations.es;
-  const currentStep = REGISTRATION_STEPS[activeStep];
-  const isLastStep = activeStep === REGISTRATION_STEPS.length - 1;
-  const errors = useMemo(
-    () => validatePersonalInfo(personalInfo, copy),
-    [personalInfo, copy],
-  );
-  const hasPersonalInfoErrors = Object.keys(errors).length > 0;
-  const vehicleErrors = useMemo(
-    () => validateVehicleInfo(vehicleInfo, copy),
-    [vehicleInfo, copy],
-  );
-  const hasVehicleInfoErrors = Object.keys(vehicleErrors).length > 0;
-  const documentErrors = useMemo(
-    () => validateDriverDocuments(driverDocuments, copy),
-    [driverDocuments, copy],
-  );
-  const hasDocumentErrors = Object.keys(documentErrors).length > 0;
-  const continueDisabled = (activeStep === 0 && hasAttemptedContinue && hasPersonalInfoErrors)
-    || (activeStep === 1 && hasAttemptedVehicleContinue && hasVehicleInfoErrors)
-    || (activeStep === 2 && (hasPersonalInfoErrors || hasVehicleInfoErrors || hasDocumentErrors));
-
-  const updatePersonalInfo = (field, value) => {
-    setPersonalInfo((current) => ({ ...current, [field]: value }));
-    setIsComplete(false);
+  const scrollToForm = () => {
+    scrollRef.current?.scrollTo({ y: Math.max(formOffset - 8, 0), animated: true });
   };
 
-  const updateVehicleInfo = (field, value) => {
-    setVehicleInfo((current) => ({ ...current, [field]: value }));
-    setIsComplete(false);
+  const returnToLogin = async () => {
+    try {
+      await signOutDriver();
+      router.replace('/');
+    } catch (error) {
+      console.error('No fue posible cerrar la sesión después del registro:', error);
+      Alert.alert(copy.signOutErrorTitle, copy.signOutErrorMessage, [
+        { text: copy.accept, onPress: returnToLogin },
+      ], { cancelable: false });
+    }
   };
 
-  const updateDriverDocuments = (field, value) => {
-    setDriverDocuments((current) => ({ ...current, [field]: value }));
-    setIsComplete(false);
-  };
-
-  const markTouched = (field) => setTouched((current) => ({ ...current, [field]: true }));
-
-  const showPersonalInfoErrors = () => {
-    setHasAttemptedContinue(true);
-    setTouched({
-      profilePhoto: true,
-      fullName: true,
-      identityDocument: true,
-      phone: true,
-      birthDate: true,
-      gender: true,
-      email: true,
-      language: true,
-    });
-    scrollRef.current?.scrollTo({ y: Math.max(personalFormOffset - 8, 0), animated: true });
-  };
-
-  const showVehicleInfoErrors = () => {
-    setHasAttemptedVehicleContinue(true);
-    setVehicleTouched({
-      category: true,
-      plate: true,
-      make: true,
-      model: true,
-      year: true,
-      color: true,
-      passengerCapacity: true,
-      photo: true,
-    });
-    scrollRef.current?.scrollTo({ y: Math.max(vehicleFormOffset - 8, 0), animated: true });
-  };
-
-  const selectStep = (step) => {
-    if (step === activeStep) return;
-    if (activeStep === 0 && step > 0 && hasPersonalInfoErrors) {
-      showPersonalInfoErrors();
+  const continueRegistration = async () => {
+    if (stepIndex === 0) {
+      if (hasPersonalInfoErrors) {
+        showPersonalInfoErrors();
+        scrollToForm();
+        return;
+      }
+      setHasAttemptedContinue(true);
+      router.navigate('/register/vehicle');
       return;
     }
-    if (activeStep === 0 && step > 1) {
-      setActiveStep(1);
-      return;
-    }
-    if (activeStep === 1 && step > 1 && hasVehicleInfoErrors) {
-      showVehicleInfoErrors();
-      return;
-    }
-    setIsComplete(false);
-    setActiveStep(step);
-  };
 
-  const submitRegistration = async () => {
-    if (hasPersonalInfoErrors || hasVehicleInfoErrors || hasDocumentErrors) {
+    if (stepIndex === 1) {
+      if (hasVehicleInfoErrors) {
+        showVehicleInfoErrors();
+        scrollToForm();
+        return;
+      }
+      setHasAttemptedVehicleContinue(true);
+      router.navigate('/register/documents');
       return;
     }
 
     try {
-      setIsSaving(true);
-
-      const [uploadedPersonalInfo, uploadedVehicleInfo, uploadedDocuments] = await uploadDriverImages(
-        personalInfo,
-        vehicleInfo,
-        driverDocuments,
-      );
-      await saveDriverRegistration(uploadedPersonalInfo, uploadedVehicleInfo, uploadedDocuments);
-
-      setIsComplete(true);
-
+      const submitted = await submitRegistration();
+      if (submitted) {
+        Alert.alert(
+          copy.registrationSuccessTitle,
+          copy.registrationPendingMessage,
+          [{ text: copy.accept, onPress: returnToLogin }],
+          { cancelable: false },
+        );
+      }
     } catch (error) {
       console.error('No fue posible guardar el registro:', error);
       Alert.alert(copy.uploadErrorTitle, error.message || copy.uploadErrorMessage);
-    } finally {
-      setIsSaving(false);
     }
-  };
-  const continueRegistration = () => {
-    if (activeStep === 0) {
-      if (hasPersonalInfoErrors) {
-        showPersonalInfoErrors();
-        return;
-      }
-      setHasAttemptedContinue(true);
-      setActiveStep(1);
-      return;
-    }
-
-    if (activeStep === 1) {
-      if (hasVehicleInfoErrors) {
-        showVehicleInfoErrors();
-        return;
-      }
-      setHasAttemptedVehicleContinue(true);
-      setActiveStep(2);
-      return;
-    }
-
-    if (isLastStep) {
-      submitRegistration();
-      return;
-    }
-    setActiveStep(activeStep + 1);
-  };
-
-  const goToStep = (step) => {
-    setIsComplete(false);
-    setActiveStep(Math.max(0, Math.min(step, REGISTRATION_STEPS.length - 1)));
   };
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['bottom']} style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      <View style={styles.page}>
+      <KeyboardAvoidingView behavior="padding" style={styles.page}>
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -203,44 +133,54 @@ export default function DriverRegistrationScreen() {
           <Text style={styles.heading}>{copy.heading}</Text>
           <Text style={styles.intro}>{copy.intro}</Text>
 
+          {__DEV__ ? (
+            <Link href="/driver-preview" asChild>
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.developmentEntry, pressed && styles.pressed]}
+              >
+                <Text style={styles.developmentEntryText}>Abrir vista local de desarrollo</Text>
+                <Text style={styles.developmentEntryArrow}>→</Text>
+              </Pressable>
+            </Link>
+          ) : null}
+
           <View style={styles.progressHeader}>
             <Text style={styles.progressTitle}>{copy.progressTitle}</Text>
-            <Text style={styles.progressCount}>{`0${activeStep + 1} / 03`}</Text>
+            <Text style={styles.progressCount}>{`0${stepIndex + 1} / 03`}</Text>
           </View>
           <View
             accessibilityRole="progressbar"
-            accessibilityLabel={`${copy.steps[activeStep]} ${activeStep + 1}/3`}
-            accessibilityValue={{ min: 1, max: REGISTRATION_STEPS.length, now: activeStep + 1 }}
+            accessibilityLabel={`${copy.steps[stepIndex]} ${stepIndex + 1}/3`}
+            accessibilityValue={{ min: 1, max: REGISTRATION_ROUTES.length, now: stepIndex + 1 }}
             style={styles.progressTrack}
           >
-            <View style={[styles.progressFill, { width: `${((activeStep + 1) / 3) * 100}%` }]} />
+            <View style={[styles.progressFill, { width: `${((stepIndex + 1) / 3) * 100}%` }]} />
           </View>
 
-          <RegistrationStepTabs activeStep={activeStep} copy={copy} onSelect={selectStep} />
-
-          {currentStep.key === 'personal' ? (
+          {stepIndex === 0 ? (
             <PersonalInfoForm
               copy={copy}
               errors={errors}
               onBlur={markTouched}
               onChange={updatePersonalInfo}
-              onLayout={(event) => setPersonalFormOffset(event.nativeEvent.layout.y)}
+              onLayout={(event) => setFormOffset(event.nativeEvent.layout.y)}
               showAllErrors={hasAttemptedContinue}
               touched={touched}
               values={personalInfo}
             />
-          ) : currentStep.key === 'vehicle' ? (
+          ) : stepIndex === 1 ? (
             <VehicleInfoForm
               copy={copy}
               errors={vehicleErrors}
-              onBlur={(field) => setVehicleTouched((current) => ({ ...current, [field]: true }))}
+              onBlur={markVehicleTouched}
               onChange={updateVehicleInfo}
-              onLayout={(event) => setVehicleFormOffset(event.nativeEvent.layout.y)}
+              onLayout={(event) => setFormOffset(event.nativeEvent.layout.y)}
               showAllErrors={hasAttemptedVehicleContinue}
               touched={vehicleTouched}
               values={vehicleInfo}
             />
-          ) : currentStep.key === 'documents' ? (
+          ) : (
             <DocumentPaymentForm
               copy={copy}
               errors={documentErrors}
@@ -250,36 +190,29 @@ export default function DriverRegistrationScreen() {
               values={driverDocuments}
               vehicleYear={vehicleInfo.year}
             />
-          ) : (
-            <RegistrationStepPlaceholder copy={copy} stepKey={currentStep.key} />
           )}
 
-          {isComplete ? (
-            <View accessibilityLiveRegion="polite" style={styles.completionMessage}>
-              <Text style={styles.completionText}>{copy.completionMessage}</Text>
-            </View>
-          ) : null}
         </ScrollView>
 
         <View style={styles.footer}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: activeStep === 0 }}
-            disabled={activeStep === 0}
-            onPress={() => goToStep(activeStep - 1)}
+            accessibilityState={{ disabled: stepIndex === 0 }}
+            disabled={stepIndex === 0}
+            onPress={() => router.navigate(`/register/${REGISTRATION_ROUTES[stepIndex - 1]}`)}
             style={({ pressed }) => [
               styles.backButton,
-              activeStep === 0 && styles.disabledBackButton,
+              stepIndex === 0 && styles.disabledBackButton,
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.backButtonText, activeStep === 0 && styles.disabledBackText]}>
+            <Text style={[styles.backButtonText, stepIndex === 0 && styles.disabledBackText]}>
               {copy.back}
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: continueDisabled }}
+            accessibilityState={{ disabled: continueDisabled || isSaving }}
             disabled={continueDisabled || isSaving}
             onPress={continueRegistration}
             style={({ pressed }) => [
@@ -292,7 +225,7 @@ export default function DriverRegistrationScreen() {
             <Text style={styles.continueArrow}>{isLastStep ? '✓' : '→'}</Text>
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -301,6 +234,19 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: COLORS.background, flex: 1 },
   page: { flex: 1 },
   scrollContent: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 20 },
+  developmentEntry: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF3DE',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  developmentEntryText: { color: '#596526', fontSize: 11, fontWeight: '700' },
+  developmentEntryArrow: { color: '#596526', fontSize: 14, fontWeight: '800' },
   brandRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   brandMark: {
     alignItems: 'center',
@@ -356,6 +302,4 @@ const styles = StyleSheet.create({
   continueButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
   continueArrow: { color: COLORS.accent, fontSize: 19, fontWeight: '700' },
   pressed: { opacity: 0.76 },
-  completionMessage: { backgroundColor: '#F0F5D9', borderRadius: 12, marginTop: 14, padding: 14 },
-  completionText: { color: '#454D1F', fontSize: 13, lineHeight: 19 },
 });
