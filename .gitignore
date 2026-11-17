@@ -46,3 +46,4 @@ functions/.env.*
 /android
 
 google-services.json
+firebase-debug.log
