@@ -17,6 +17,8 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+gogle-services.json
+*-firebase-adminsdk-*.json
 
 # Metro
 .metro-health-check*
@@ -33,6 +35,8 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+functions/.env.*
+!functions/.env.example
 
 # typescript
 *.tsbuildinfo
@@ -40,3 +44,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+google-services.json
+firebase-debug.log

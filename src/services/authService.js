@@ -1,25 +1,36 @@
-
-import { signInAnonymously } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  linkWithCredential,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import { auth } from '../config/firebase';
+import { clearDriverPushToken } from './tripService';
 
-// Obtener o crear la sesión anónima del conductor
-export const signInDriverAnonymously = async () => {
-  try {
-    // Esperar a que Firebase recupere la sesión guardada
-    await auth.authStateReady();
-
-    // Si ya existe una sesión, reutilizarla
-    if (auth.currentUser) {
-      return auth.currentUser;
-    }
-
-    // Si no existe una sesión, crear una anónima
-    const userCredential = await signInAnonymously(auth);
-
-    return userCredential.user;
-
-  } catch (error) {
-    console.error('Error en la autenticación del conductor:', error);
-    throw error;
+export const createDriverAccount = async (email, password) => {
+  const currentUser = auth.currentUser;
+  if (currentUser?.isAnonymous) {
+    const credential = EmailAuthProvider.credential(email.trim(), password);
+    return (await linkWithCredential(currentUser, credential)).user;
   }
+  return (await createUserWithEmailAndPassword(auth, email.trim(), password)).user;
 };
+
+export const signInDriver = async (email, password) => (
+  await signInWithEmailAndPassword(auth, email.trim(), password)
+).user;
+
+export const resetDriverPassword = (email) => sendPasswordResetEmail(auth, email.trim());
+
+export async function signOutDriver() {
+  if (auth.currentUser && !auth.currentUser.isAnonymous) {
+    try {
+      await clearDriverPushToken();
+    } catch (error) {
+      console.error('No se pudo desactivar el conductor antes de cerrar sesión:', error);
+    }
+  }
+  return signOut(auth);
+}
